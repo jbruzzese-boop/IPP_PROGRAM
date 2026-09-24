@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMC Contacts</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --green:#0b8f55;
+      --green-dark:#086b41;
+      --bg:#f5f7f8;
+      --panel:#ffffff;
+      --line:#dfe5e8;
+      --text:#172126;
+      --muted:#66737b;
+      --danger:#b42318;
+      --warning:#9a6700;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:var(--text);
+    }
+    .hidden { display:none !important; }
+    .app-shell { min-height:100vh; }
+    header {
+      background:#fff; border-bottom:1px solid var(--line); padding:16px 24px;
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      position:sticky; top:0; z-index:20;
+    }
+    .brand { font-size:22px; font-weight:700; }
+    .brand span { color:var(--green); }
+    .user-area { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted); }
+    main { max-width:1450px; margin:0 auto; padding:24px; }
+    .card {
+      background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px;
+      box-shadow:0 1px 2px rgba(0,0,0,.03);
+    }
+    .login-wrap { max-width:430px; margin:10vh auto; }
+    h1,h2,h3 { margin-top:0; }
+    label { display:block; font-size:13px; font-weight:700; margin:0 0 6px; }
+    input,select,textarea {
+      width:100%; padding:11px 12px; border:1px solid #cfd7dc; border-radius:9px; background:#fff;
+      font:inherit;
+    }
+    textarea { min-height:90px; resize:vertical; }
+    button {
+      border:0; border-radius:9px; padding:10px 14px; font-weight:700; cursor:pointer;
+    }
+    .btn-primary { background:var(--green); color:#fff; }
+    .btn-primary:hover { background:var(--green-dark); }
+    .btn-secondary { background:#eef2f4; color:#1d2930; }
+    .btn-danger { background:#fee4e2; color:var(--danger); }
+    .toolbar {
+      display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; margin-bottom:16px;
+    }
+    .stats { color:var(--muted); font-size:13px; margin:8px 0 14px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+    table { width:100%; border-collapse:collapse; min-width:1150px; background:#fff; }
+    th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; vertical-align:top; }
+    th { background:#f8fafb; position:sticky; top:0; z-index:2; }
+    tr:hover td { background:#fbfdfc; }
+    .actions { display:flex; gap:6px; }
+    .missing { background:#fff8d8; }
+    .modal {
+      position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;
+      padding:20px; z-index:50;
+    }
+    .modal-panel {
+      background:#fff; width:min(900px,96vw); max-height:92vh; overflow:auto; border-radius:14px; padding:22px;
+    }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .full { grid-column:1/-1; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+    .notice { margin:12px 0; padding:10px 12px; border-radius:8px; font-size:13px; }
+    .notice.error { background:#fee4e2; color:var(--danger); }
+    .notice.warn { background:#fff4cc; color:var(--warning); }
+    .notice.ok { background:#e7f6ee; color:var(--green-dark); }
+    .pill {
+      display:inline-block; padding:3px 7px; border-radius:999px; background:#eef3f5; font-size:12px; margin:1px 3px 1px 0;
+    }
+    @media (max-width:900px) {
+      .toolbar { grid-template-columns:1fr; }
+      .grid { grid-template-columns:1fr; }
+      .full { grid-column:auto; }
+      main { padding:14px; }
+      header { padding:12px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginView" class="login-wrap card">
+    <h1>SMC Contacts</h1>
+    <p style="color:#66737b">Shared contact database</p>
+    <div id="loginMsg"></div>
+    <form id="loginForm">
+      <div style="margin-bottom:12px">
+        <label>Email</label>
+        <input id="loginEmail" type="email" autocomplete="username" required />
+      </div>
+      <div style="margin-bottom:16px">
+        <label>Password</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </div>
+      <button class="btn-primary" type="submit" style="width:100%">Sign in</button>
+    </form>
+  </div>
+
+  <div id="appView" class="app-shell hidden">
+    <header>
+      <div class="brand"><span>the SMC</span> Contacts</div>
+      <div class="user-area">
+        <span id="currentUser"></span>
+        <button id="logoutBtn" class="btn-secondary">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+          <div>
+            <h2 style="margin-bottom:4px">Contacts</h2>
+            <div class="stats" id="stats">Loading…</div>
+          </div>
+          <button id="addBtn" class="btn-primary">+ Add contact</button>
+        </div>
+
+        <div class="toolbar">
+          <input id="searchInput" placeholder="Search name, company, email, phone, country…" />
+          <select id="countryFilter"><option value="">All countries</option></select>
+          <select id="networkFilter"><option value="">All networks</option></select>
+          <button id="clearFilters" class="btn-secondary">Clear</button>
+        </div>
+
+        <div id="appMsg"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Primary phone</th>
+                <th>Country</th>
+                <th>City</th>
+                <th>Networks</th>
+                <th>Category</th>
+                <th>Added by</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contactsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="contactModal" class="modal hidden">
+    <div class="modal-panel">
+      <h2 id="modalTitle">Add contact</h2>
+      <div id="modalMsg"></div>
+      <form id="contactForm">
+        <input id="contactId" type="hidden" />
+        <div class="grid">
+          <div><label>Company</label><input id="company" /></div>
+          <div><label>Category</label><input id="category" placeholder="Partner, Prospect, Client…" /></div>
+          <div><label>First name</label><input id="first_name" /></div>
+          <div><label>Last name</label><input id="last_name" /></div>
+          <div><label>Email</label><input id="email" type="email" /></div>
+          <div><label>Primary phone</label><input id="primary_phone" /></div>
+          <div><label>Other phone</label><input id="other_phone" /></div>
+          <div><label>Country</label><input id="country" /></div>
+          <div><label>City</label><input id="city" /></div>
+          <div><label>Networks / Associations</label><input id="networks" placeholder="IAM, FIDI, LACMA…" /></div>
+          <div class="full"><label>Notes</label><textarea id="notes"></textarea></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn" class="btn-secondary">Cancel</button>
+          <button type="submit" class="btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://eiqbmpatlngojpagfsqb.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_O8_krIBrJUwdtewYyjWcPQ_x1bmEXJf';
+    const TABLE = "IPP_PROGRAM";
+
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let contacts = [];
+    let session = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function showMsg(target, text, type="error") {
+      target.innerHTML = text ? `<div class="notice ${type}">${text}</div>` : "";
+    }
+
+    function escapeHtml(v) {
+      return String(v ?? "").replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    }
+
+    function normalize(v) {
+      return (v || "").toString().trim().toLowerCase();
+    }
+
+    async function boot() {
+      const { data } = await sb.auth.getSession();
+      session = data.session;
+      if (session) {
+        openApp();
+      } else {
+        $("loginView").classList.remove("hidden");
+      }
+
+      sb.auth.onAuthStateChange((_event, newSession) => {
+        session = newSession;
+        if (newSession) openApp();
+        else {
+          $("appView").classList.add("hidden");
+          $("loginView").classList.remove("hidden");
+        }
+      });
+    }
+
+    async function openApp() {
+      $("loginView").classList.add("hidden");
+      $("appView").classList.remove("hidden");
+      $("currentUser").textContent = session?.user?.email || "";
+      await loadContacts();
+    }
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showMsg($("loginMsg"), "");
+      const email = $("loginEmail").value.trim();
+      const password = $("loginPassword").value;
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) showMsg($("loginMsg"), error.message);
+    });
+
+    $("logoutBtn").addEventListener("click", () => sb.auth.signOut());
+
+    async function loadContacts() {
+      showMsg($("appMsg"), "");
+      const { data, error } = await sb.from(TABLE).select("*").order("company", { ascending:true });
+      if (error) {
+        showMsg($("appMsg"), error.message);
+        return;
+      }
+      contacts = data || [];
+      buildFilters();
+      renderContacts();
+    }
+
+    function buildFilters() {
+      const countries = [...new Set(contacts.map(c => c.country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      const currentCountry = $("countryFilter").value;
+      $("countryFilter").innerHTML = `<option value="">All countries</option>` + countries.map(c => `<option>${escapeHtml(c)}</option>`).join("");
+      $("countryFilter").value = currentCountry;
+
+      const networks = new Set();
+      contacts.forEach(c => {
+        (c.networks || "").split(/[,;/|]/).map(x => x.trim()).filter(Boolean).forEach(x => networks.add(x));
+      });
+      const list = [...networks].sort((a,b)=>a.localeCompare(b));
+      const currentNetwork = $("networkFilter").value;
+      $("networkFilter").innerHTML = `<option value="">All networks</option>` + list.map(n => `<option>${escapeHtml(n)}</option>`).join("");
+      $("networkFilter").value = currentNetwork;
+    }
+
+    function filteredContacts() {
+      const q = normalize($("searchInput").value);
+      const country = $("countryFilter").value;
+      const network = $("networkFilter").value;
+      return contacts.filter(c => {
+        const haystack = [
+          c.company,c.first_name,c.last_name,c.email,c.primary_phone,c.other_phone,
+          c.country,c.city,c.networks,c.category,c.notes
+        ].map(normalize).join(" ");
+        const matchesSearch = !q || haystack.includes(q);
+        const matchesCountry = !country || c.country === country;
+        const matchesNetwork = !network || normalize(c.networks).includes(normalize(network));
+        return matchesSearch && matchesCountry && matchesNetwork;
+      });
+    }
+
+    function renderContacts() {
+      const rows = filteredContacts();
+      $("stats").textContent = `${rows.length} displayed / ${contacts.length} total`;
+      $("contactsBody").innerHTML = rows.map(c => {
+        const name = [c.first_name,c.last_name].filter(Boolean).join(" ");
+        const networkHtml = (c.networks || "").split(/[,;/|]/).map(x=>x.trim()).filter(Boolean).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join("");
+        return `<tr>
+          <td class="${c.company ? "" : "missing"}">${escapeHtml(c.company)}</td>
+          <td class="${name ? "" : "missing"}">${escapeHtml(name)}</td>
+          <td class="${c.email ? "" : "missing"}">${escapeHtml(c.email)}</td>
+          <td class="${c.primary_phone ? "" : "missing"}">${escapeHtml(c.primary_phone)}</td>
+          <td class="${c.country ? "" : "missing"}">${escapeHtml(c.country)}</td>
+          <td>${escapeHtml(c.city)}</td>
+          <td>${networkHtml}</td>
+          <td>${escapeHtml(c.category)}</td>
+          <td>${escapeHtml(c.added_by)}</td>
+          <td><div class="actions">
+            <button class="btn-secondary" onclick="editContact('${c.id}')">Edit</button>
+            <button class="btn-danger" onclick="deleteContact('${c.id}')">Delete</button>
+          </div></td>
+        </tr>`;
+      }).join("");
+    }
+
+    ["searchInput","countryFilter","networkFilter"].forEach(id => {
+      $(id).addEventListener(id==="searchInput" ? "input" : "change", renderContacts);
+    });
+
+    $("clearFilters").addEventListener("click", () => {
+      $("searchInput").value = "";
+      $("countryFilter").value = "";
+      $("networkFilter").value = "";
+      renderContacts();
+    });
+
+    function openModal(contact=null) {
+      $("contactForm").reset();
+      showMsg($("modalMsg"), "");
+      $("modalTitle").textContent = contact ? "Edit contact" : "Add contact";
+      $("contactId").value = contact?.id || "";
+      ["company","first_name","last_name","email","primary_phone","other_phone","country","city","networks","category","notes"]
+        .forEach(k => $(k).value = contact?.[k] || "");
+      $("contactModal").classList.remove("hidden");
+    }
+
+    $("addBtn").addEventListener("click", () => openModal());
+    $("cancelBtn").addEventListener("click", () => $("contactModal").classList.add("hidden"));
+    $("contactModal").addEventListener("click", e => {
+      if (e.target === $("contactModal")) $("contactModal").classList.add("hidden");
+    });
+
+    window.editContact = function(id) {
+      const c = contacts.find(x => x.id === id);
+      if (c) openModal(c);
+    };
+
+    function collectForm() {
+      const obj = {};
+      ["company","first_name","last_name","email","primary_phone","other_phone","country","city","networks","category","notes"]
+        .forEach(k => obj[k] = $(k).value.trim() || null);
+      obj.added_by = session?.user?.email || null;
+      obj.updated_at = new Date().toISOString();
+      return obj;
+    }
+
+    function findDuplicate(payload, currentId) {
+      const email = normalize(payload.email);
+      if (email) {
+        const byEmail = contacts.find(c => c.id !== currentId && normalize(c.email) === email);
+        if (byEmail) return byEmail;
+      }
+      const key = [payload.company,payload.first_name,payload.last_name].map(normalize).join("|");
+      if (key !== "||") {
+        const byName = contacts.find(c => c.id !== currentId &&
+          [c.company,c.first_name,c.last_name].map(normalize).join("|") === key);
+        if (byName) return byName;
+      }
+      return null;
+    }
+
+    $("contactForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showMsg($("modalMsg"), "");
+      const id = $("contactId").value || null;
+      const payload = collectForm();
+      const duplicate = findDuplicate(payload, id);
+      if (duplicate) {
+        const dn = [duplicate.first_name, duplicate.last_name].filter(Boolean).join(" ");
+        showMsg($("modalMsg"),
+          `Possible duplicate found: <strong>${escapeHtml(dn || "Unnamed contact")}</strong> — ${escapeHtml(duplicate.company || "")}. Please review before saving.`,
+          "warn");
+        return;
+      }
+
+      let result;
+      if (id) {
+        result = await sb.from(TABLE).update(payload).eq("id", id);
+      } else {
+        payload.created_at = new Date().toISOString();
+        result = await sb.from(TABLE).insert(payload);
+      }
+      if (result.error) {
+        showMsg($("modalMsg"), result.error.message);
+        return;
+      }
+      $("contactModal").classList.add("hidden");
+      await loadContacts();
+    });
+
+    window.deleteContact = async function(id) {
+      const c = contacts.find(x => x.id === id);
+      const name = [c?.first_name,c?.last_name].filter(Boolean).join(" ") || c?.company || "this contact";
+      if (!confirm(`Delete ${name}?`)) return;
+      const { error } = await sb.from(TABLE).delete().eq("id", id);
+      if (error) showMsg($("appMsg"), error.message);
+      else await loadContacts();
+    };
+
+    boot();
+  </script>
+</body>
+</html>
