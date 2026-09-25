@@ -1,0 +1,1552 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMC Contacts</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <style>
+    :root {
+      --green:#0b8f55;
+      --green-dark:#086b41;
+      --bg:#f5f7f8;
+      --panel:#ffffff;
+      --line:#dfe5e8;
+      --text:#172126;
+      --muted:#66737b;
+      --danger:#b42318;
+      --warning:#9a6700;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:var(--text);
+    }
+    .hidden { display:none !important; }
+    .app-shell { min-height:100vh; }
+    header {
+      background:#fff; border-bottom:1px solid var(--line); padding:16px 24px;
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      position:sticky; top:0; z-index:20;
+    }
+    .brand { font-size:22px; font-weight:700; }
+    .brand span { color:var(--green); }
+    .user-area { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted); }
+    main { max-width:1450px; margin:0 auto; padding:24px; }
+    .card {
+      background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px;
+      box-shadow:0 1px 2px rgba(0,0,0,.03);
+    }
+    .login-wrap { max-width:430px; margin:10vh auto; }
+    h1,h2,h3 { margin-top:0; }
+    label { display:block; font-size:13px; font-weight:700; margin:0 0 6px; }
+    input,select,textarea {
+      width:100%; padding:11px 12px; border:1px solid #cfd7dc; border-radius:9px; background:#fff;
+      font:inherit;
+    }
+    textarea { min-height:90px; resize:vertical; }
+    button {
+      border:0; border-radius:9px; padding:10px 14px; font-weight:700; cursor:pointer;
+    }
+    .btn-primary { background:var(--green); color:#fff; }
+    .btn-primary:hover { background:var(--green-dark); }
+    .btn-secondary { background:#eef2f4; color:#1d2930; }
+    .btn-danger { background:#fee4e2; color:var(--danger); }
+    .toolbar {
+      display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; margin-bottom:16px;
+    }
+    .stats { color:var(--muted); font-size:13px; margin:8px 0 14px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+    table { width:100%; border-collapse:collapse; min-width:1150px; background:#fff; }
+    th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; vertical-align:top; }
+    th { background:#f8fafb; position:sticky; top:0; z-index:2; }
+    tr:hover td { background:#fbfdfc; }
+    .actions { display:flex; gap:6px; }
+    .missing { background:#fff8d8; }
+    .modal {
+      position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;
+      padding:20px; z-index:50;
+    }
+    .modal-panel {
+      background:#fff; width:min(900px,96vw); max-height:92vh; overflow:auto; border-radius:14px; padding:22px;
+    }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .full { grid-column:1/-1; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+    .notice { margin:12px 0; padding:10px 12px; border-radius:8px; font-size:13px; }
+    .notice.error { background:#fee4e2; color:var(--danger); }
+    .notice.warn { background:#fff4cc; color:var(--warning); }
+    .notice.ok { background:#e7f6ee; color:var(--green-dark); }
+    .pill {
+      display:inline-block; padding:3px 7px; border-radius:999px; background:#eef3f5; font-size:12px; margin:1px 3px 1px 0;
+    }
+
+    .nav-tabs {
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 18px;
+    }
+    .nav-tab {
+      background:#eef2f4; color:#1d2930; border:1px solid var(--line);
+    }
+    .nav-tab.active {
+      background:var(--green); color:#fff; border-color:var(--green);
+    }
+    .view-section.hidden { display:none !important; }
+    .map-layout {
+      display:grid; grid-template-columns:minmax(0,1.6fr) minmax(320px,.8fr); gap:16px;
+    }
+    .map-box {
+      height:620px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#eef3f1;
+    }
+    .map-sidebar {
+      max-height:620px; overflow:auto; border:1px solid var(--line); border-radius:12px; background:#fff;
+    }
+    .map-sidebar-head {
+      position:sticky; top:0; background:#fff; padding:14px; border-bottom:1px solid var(--line); z-index:2;
+    }
+    .map-sidebar-body { padding:10px; }
+    .partner-card {
+      border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; background:#fff;
+    }
+    .partner-card h3 { margin:0 0 5px; font-size:16px; }
+    .partner-contact { padding-top:8px; margin-top:8px; border-top:1px solid #edf0f2; font-size:13px; }
+    .map-stat {
+      display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 12px;
+    }
+    .map-stat span {
+      background:#eef3f5; border-radius:999px; padding:4px 9px; font-size:12px;
+    }
+    .country-marker, .state-marker {
+      width:36px; height:36px; border-radius:50%; border:2px solid white;
+      background:var(--green); color:white; display:flex; align-items:center; justify-content:center;
+      font-weight:700; font-size:11px; box-shadow:0 1px 6px rgba(0,0,0,.28);
+    }
+    .leaflet-div-icon { background:transparent; border:0; }
+    .map-search-row {
+      display:grid; grid-template-columns:1fr auto; gap:8px; margin-bottom:12px;
+    }
+    .map-hint { color:var(--muted); font-size:13px; margin:0 0 12px; }
+    .empty-state { padding:24px; color:var(--muted); text-align:center; }
+
+    @media (max-width:900px) {
+      .toolbar { grid-template-columns:1fr; }
+      .grid { grid-template-columns:1fr; }
+      .full { grid-column:auto; }
+      main { padding:14px; }
+      header { padding:12px 14px; }
+      .map-layout { grid-template-columns:1fr; }
+      .map-box { height:480px; }
+      .map-sidebar { max-height:none; }
+    }
+  
+    /* Ensure the contact editor always appears above Leaflet maps and controls */
+    dialog {
+      position: fixed !important;
+      z-index: 10000 !important;
+    }
+    dialog::backdrop {
+      z-index: 9999 !important;
+      background: rgba(0,0,0,.45);
+    }
+    .leaflet-container,
+    .leaflet-pane,
+    .leaflet-top,
+    .leaflet-bottom,
+    .leaflet-control {
+      z-index: 1 !important;
+    }
+    .leaflet-pane { z-index: 1 !important; }
+    .leaflet-map-pane { z-index: 1 !important; }
+    .leaflet-tile-pane { z-index: 1 !important; }
+    .leaflet-overlay-pane { z-index: 2 !important; }
+    .leaflet-marker-pane { z-index: 3 !important; }
+    .leaflet-tooltip-pane { z-index: 4 !important; }
+    .leaflet-popup-pane { z-index: 5 !important; }
+
+
+    .network-picker {
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:12px;
+      background:#fafcfa;
+    }
+    .network-picker-title {
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:8px;
+    }
+    .network-checkboxes {
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px 10px;
+    }
+    .network-option {
+      display:flex;
+      align-items:center;
+      gap:7px;
+      padding:6px 8px;
+      border:1px solid #dfe6e2;
+      border-radius:7px;
+      background:white;
+      cursor:pointer;
+      font-size:13px;
+    }
+    .network-option input {
+      width:16px;
+      height:16px;
+      margin:0;
+      accent-color:var(--green);
+    }
+    .network-other {
+      margin-top:10px;
+    }
+    .network-other input { width:100%; }
+    @media(max-width:700px) {
+      .network-checkboxes { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+
+
+    /* Keep row actions visible on the Contacts table */
+    .table-wrap {
+      position: relative;
+      overflow-x: auto;
+      overflow-y: auto;
+    }
+    #contactsView table th:last-child,
+    #contactsView table td:last-child {
+      position: sticky;
+      right: 0;
+      min-width: 150px;
+      background: #fff;
+      z-index: 4;
+      box-shadow: -8px 0 10px -10px rgba(0,0,0,.35);
+    }
+    #contactsView table th:last-child {
+      background: #f8fafb;
+      z-index: 6;
+    }
+    #contactsView table tr:hover td:last-child {
+      background: #fbfdfc;
+    }
+    #contactsView .actions {
+      white-space: nowrap;
+      display: flex;
+      gap: 6px;
+      justify-content: flex-start;
+    }
+    #contactsView .actions button {
+      padding: 8px 10px;
+    }
+
+
+/* ===== Partenaires Suisse: reprise de l'ancienne interface ===== */
+.swiss-old-app{--sbg:#f6f8f7;--spanel:#fff;--sink:#1d2b22;--smuted:#69776e;--sline:#dce8df;--sbrand:#008c2d;--sdark:#086f28;--ssoft:#eaf6ee;--sshadow:0 8px 24px rgba(13,42,23,.08);background:var(--sbg);color:var(--sink);border-radius:16px;padding:18px}
+.swiss-old-app *{box-sizing:border-box}.swiss-old-app button,.swiss-old-app input,.swiss-old-app select,.swiss-old-app textarea{font:inherit}.swiss-old-app button{cursor:pointer}
+.s-top{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:16px}.s-brand{display:flex;gap:14px;align-items:center}.s-logo{height:62px;min-width:90px;background:#fff;border:1px solid var(--sline);border-radius:15px;padding:15px 10px;box-shadow:var(--sshadow);font-weight:900;font-size:19px;color:#139346;text-align:center}.s-logo span{color:#087a31}.s-top h1{margin:0;font-size:23px}.s-sub{font-size:13px;color:var(--smuted);margin-top:3px}
+.s-btn{border:1px solid var(--sline);background:#fff;color:var(--sink);border-radius:10px;padding:9px 12px;font-weight:700}.s-btn.s-primary{background:var(--sbrand);border-color:var(--sbrand);color:#fff}.s-btn.s-danger{color:#a12626}
+.s-toolbar{display:grid;grid-template-columns:minmax(240px,1.5fr) repeat(3,minmax(140px,.7fr));gap:9px;background:#fff;border:1px solid var(--sline);border-radius:16px;padding:13px;box-shadow:var(--sshadow);margin-bottom:14px}
+.s-label{display:block;font-size:11px;font-weight:700;color:var(--smuted);margin-bottom:5px}.swiss-old-app input,.swiss-old-app select,.swiss-old-app textarea{width:100%;border:1px solid var(--sline);border-radius:10px;padding:9px 10px;background:#fff;outline:none}.swiss-old-app input:focus,.swiss-old-app select:focus,.swiss-old-app textarea:focus{border-color:#42a45f;box-shadow:0 0 0 3px rgba(66,164,95,.12)}
+.s-main{display:grid;grid-template-columns:minmax(420px,.9fr) minmax(500px,1.1fr);gap:14px;align-items:start}.s-panel{background:#fff;border:1px solid var(--sline);border-radius:18px;box-shadow:var(--sshadow);overflow:hidden}.s-head{padding:14px 15px;border-bottom:1px solid var(--sline);display:flex;justify-content:space-between;gap:12px;align-items:center}.s-title{font-weight:800;font-size:17px}.s-hint{font-size:12px;color:var(--smuted);margin-top:2px}
+#sMap{display:block;width:calc(100% - 24px);margin:10px 12px 12px;min-height:330px;border:1px solid var(--sline);border-radius:13px;background:#f8fbf9}#sFallback{display:none;padding:12px;grid-template-columns:repeat(5,1fr);gap:7px}.s-chip{border:1px solid var(--sline);border-radius:9px;background:#fff;padding:7px 5px;font-size:11px;font-weight:700}.s-chip.has{background:var(--ssoft)}.s-chip.sel{background:var(--sbrand);color:#fff}
+.s-canton{stroke:#fff;stroke-width:1.2;cursor:pointer}.s-canton.sel{stroke:var(--sdark);stroke-width:3}.s-lab{pointer-events:none;font-size:11px;font-weight:800;fill:#213326;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:3px}
+.s-resultsTop{padding:14px 15px 6px;display:flex;justify-content:space-between;align-items:end}.s-big{font-size:20px;font-weight:800}.s-count{background:var(--ssoft);color:var(--sdark);border:1px solid #cbe5d3;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:800}
+.s-list{padding:8px 12px 14px;display:grid;gap:9px;max-height:760px;overflow:auto}.s-card{border:1px solid var(--sline);border-radius:13px;padding:12px;background:#fff}.s-card.s-blocked{background:#fff1f1;border:2px solid #d34b4b}.s-ctop{display:flex;justify-content:space-between;gap:10px}.s-company{font-weight:800}.s-contact{font-size:12px;color:var(--smuted);margin-top:2px}.s-tag{border:1px solid var(--sline);border-radius:999px;padding:4px 7px;font-size:11px;font-weight:700;white-space:nowrap}.s-tag.pref{background:var(--ssoft);color:var(--sdark)}.s-tag.blocked{background:#b42323;color:#fff;border-color:#b42323}.s-service{font-size:12px;color:var(--sdark);font-weight:700;margin-top:8px}.s-row{display:grid;grid-template-columns:72px 1fr;gap:6px;font-size:12px;margin-top:5px}.s-row b{color:var(--smuted)}.s-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.s-act{text-decoration:none;border:1px solid var(--sline);border-radius:8px;padding:6px 8px;font-size:11px;font-weight:700;color:var(--sink);background:#fff}.s-act.primary{background:var(--sbrand);border-color:var(--sbrand);color:#fff}.s-blocked-note{font-size:12px;color:#a12626;font-weight:700;margin-top:8px}
+.s-statusbar{margin-top:12px;background:#fff;border:1px solid var(--sline);border-radius:14px;padding:11px 13px;font-size:12px;color:var(--smuted);display:flex;justify-content:space-between;gap:12px;align-items:center;box-shadow:var(--sshadow)}
+.s-modalBack{display:none;position:fixed;inset:0;background:rgba(10,20,14,.42);padding:20px;z-index:12000;overflow:auto}.s-modalBack.open{display:block}.s-modal{max-width:780px;margin:20px auto;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}.s-modalHead{padding:15px 16px;border-bottom:1px solid var(--sline);display:flex;justify-content:space-between;align-items:center}.s-modalBody{padding:15px}.s-form{display:grid;grid-template-columns:1fr 1fr;gap:9px}.s-full{grid-column:1/-1}.s-modal textarea{min-height:75px;resize:vertical}.s-modalActions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap;margin-top:13px}
+.s-cantonChecks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:8px}.s-cantonCheck{display:flex;align-items:center;gap:7px;border:1px solid var(--sline);border-radius:9px;padding:8px 9px;background:#fff;font-size:12px;cursor:pointer;min-height:40px}.s-cantonCheck input{width:auto;margin:0;accent-color:var(--sbrand)}.s-cantonCheck:has(input:checked){background:var(--ssoft);border-color:#a9d4b5;color:var(--sdark);font-weight:700}.s-serviceTools{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}.s-miniPick{border:1px solid var(--sline);border-radius:999px;background:#fff;padding:6px 9px;font-size:11px;font-weight:700;color:var(--sink)}
+@media(max-width:980px){.s-toolbar{grid-template-columns:1fr 1fr}.s-main{grid-template-columns:1fr}.s-list{max-height:none}}@media(max-width:620px){.s-cantonChecks{grid-template-columns:repeat(2,minmax(0,1fr))}.s-top{align-items:flex-start;flex-direction:column}.s-toolbar{grid-template-columns:1fr}.s-form{grid-template-columns:1fr}.s-full{grid-column:auto}#sFallback{grid-template-columns:repeat(3,1fr)}}
+
+</style>
+</head>
+<body>
+  <div id="loginView" class="login-wrap card">
+    <h1>SMC Contacts</h1>
+    <p style="color:#66737b">Shared contact database</p>
+    <div id="loginMsg"></div>
+    <form id="loginForm">
+      <div style="margin-bottom:12px">
+        <label>Email</label>
+        <input id="loginEmail" type="email" autocomplete="username" required />
+      </div>
+      <div style="margin-bottom:16px">
+        <label>Password</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </div>
+      <button class="btn-primary" type="submit" style="width:100%">Sign in</button>
+    </form>
+  </div>
+
+  <div id="appView" class="app-shell hidden">
+    <header>
+      <div class="brand"><span>the SMC</span> Contacts</div>
+      <div class="user-area">
+        <span id="currentUser"></span>
+        <button id="logoutBtn" class="btn-secondary">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="nav-tabs">
+        <button id="contactsTab" class="nav-tab active">Contacts</button>
+        <button id="worldMapTab" class="nav-tab">World Map</button>
+        <button id="usaMapTab" class="nav-tab">USA Map</button>
+        <button id="switzerlandMapTab" class="nav-tab">Partenaires Suisse</button>
+      </div>
+
+      <section id="contactsView" class="view-section">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+            <div>
+              <h2 style="margin-bottom:4px">Contacts</h2>
+              <div class="stats" id="stats">Loading…</div>
+            </div>
+            <button id="addBtn" class="btn-primary">+ Add contact</button>
+          </div>
+
+          <div class="toolbar">
+            <input id="searchInput" placeholder="Search name, company, email, phone, country…" />
+            <select id="countryFilter"><option value="">All countries</option></select>
+            <select id="networkFilter"><option value="">All networks</option></select>
+            <button id="clearFilters" class="btn-secondary">Clear</button>
+          </div>
+
+          <div id="appMsg"></div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Primary phone</th>
+                  <th>Country</th>
+                  <th>City</th>
+                  <th>Networks</th>
+                  <th>Category</th>
+                  <th>Added by</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="contactsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="worldMapView" class="view-section hidden">
+        <div class="card">
+          <h2 style="margin-bottom:4px">World Map</h2>
+          <p class="map-hint">Click a country marker to display the partner companies and all contacts registered for that country.</p>
+          <div class="map-stat">
+            <span id="worldCountriesCount">0 countries</span>
+            <span id="worldCompaniesCount">0 companies</span>
+            <span id="worldContactsCount">0 contacts</span>
+          </div>
+          <div class="map-layout">
+            <div id="worldMap" class="map-box"></div>
+            <aside class="map-sidebar">
+              <div class="map-sidebar-head">
+                <div class="map-search-row">
+                  <select id="worldCountrySelect"><option value="">Select a country</option></select>
+                  <button id="worldResetBtn" class="btn-secondary">All</button>
+                </div>
+                <strong id="worldSelectionTitle">All countries</strong>
+              </div>
+              <div id="worldPartnerList" class="map-sidebar-body"></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section id="usaMapView" class="view-section hidden">
+        <div class="card">
+          <h2 style="margin-bottom:4px">USA Map</h2>
+          <p class="map-hint">State information is read from the existing data when available, especially IAM records containing “Region/state: XX”.</p>
+          <div class="map-stat">
+            <span id="usaStatesCount">0 states</span>
+            <span id="usaCompaniesCount">0 companies</span>
+            <span id="usaContactsCount">0 contacts</span>
+            <span id="usaUnassignedCount">0 without state</span>
+          </div>
+          <div class="map-layout">
+            <div id="usaMap" class="map-box"></div>
+            <aside class="map-sidebar">
+              <div class="map-sidebar-head">
+                <div class="map-search-row">
+                  <select id="usaStateSelect"><option value="">Select a state</option></select>
+                  <button id="usaResetBtn" class="btn-secondary">All</button>
+                </div>
+                <strong id="usaSelectionTitle">All U.S.A contacts</strong>
+              </div>
+              <div id="usaPartnerList" class="map-sidebar-body"></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      
+<section id="switzerlandMapView" class="view-section hidden">
+  <div class="swiss-old-app">
+    <header class="s-top">
+      <div class="s-brand">
+        <div class="s-logo">the<span>SMC</span></div>
+        <div>
+          <h1>Partenaires Suisse</h1>
+          <div class="s-sub">Trouver, ajouter et modifier un partenaire en quelques secondes</div>
+        </div>
+      </div>
+      <button class="s-btn s-primary" id="sAddBtn">+ Ajouter un partenaire</button>
+    </header>
+
+    <section class="s-toolbar">
+      <div><label class="s-label">Recherche</label><input id="sSearch" placeholder="Société, contact, ville, service…"></div>
+      <div><label class="s-label">Métier</label><select id="sCategory"><option value="">Tous les métiers</option></select></div>
+      <div><label class="s-label">Statut</label>
+        <select id="sStatus">
+          <option value="">Tous les statuts</option>
+          <option>Préféré</option><option>Validé</option><option>Second choix</option>
+          <option>Secours</option><option>À qualifier</option><option>Ne plus utiliser</option><option>Suspendu</option>
+        </select>
+      </div>
+      <div><label class="s-label">Tri</label>
+        <select id="sSort">
+          <option value="priority">Priorité</option>
+          <option value="company">Société A → Z</option>
+          <option value="category">Métier</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="s-main">
+      <div class="s-panel">
+        <div class="s-head">
+          <div><div class="s-title">Carte des cantons</div><div class="s-hint">Cliquez sur un canton.</div></div>
+          <button class="s-btn" id="sAllBtn">Toute la Suisse</button>
+        </div>
+        <div id="sMapStatus" class="s-hint" style="padding:9px 13px 0">Chargement de la carte…</div>
+        <svg id="sMap" viewBox="0 0 800 520"></svg>
+        <div id="sFallback"></div>
+      </div>
+
+      <div class="s-panel">
+        <div class="s-resultsTop">
+          <div><div class="s-big" id="sPlaceTitle">Genève</div><div class="s-hint" id="sMeta"></div></div>
+          <div class="s-count" id="sCount"></div>
+        </div>
+        <div class="s-list" id="sList"></div>
+      </div>
+    </section>
+
+    <div class="s-statusbar">
+      <span id="sDbStatus"></span>
+      <span>Base historique de 52 partenaires + données Supabase</span>
+    </div>
+  </div>
+</section>
+
+    </main>
+  </div>
+
+  
+<div id="sModalBack" class="s-modalBack">
+  <div class="s-modal">
+    <div class="s-modalHead">
+      <div>
+        <div class="s-title" id="sModalTitle">Ajouter un partenaire</div>
+        <div class="s-hint">Les modifications sont enregistrées dans Supabase.</div>
+      </div>
+      <button class="s-btn" id="sCloseBtn">Fermer</button>
+    </div>
+    <div class="s-modalBody">
+      <div id="sModalMsg"></div>
+      <div class="s-form">
+        <div><label class="s-label">Société *</label><input id="sf_company"></div>
+        <div><label class="s-label">Contact</label><input id="sf_contact"></div>
+        <div><label class="s-label">Téléphone</label><input id="sf_phone"></div>
+        <div><label class="s-label">E-mail</label><input id="sf_email"></div>
+        <div><label class="s-label">Catégorie</label><select id="sf_category"></select></div>
+        <div><label class="s-label">Sous-catégorie</label><select id="sf_subcategory"></select></div>
+        <div><label class="s-label">Canton de base</label><select id="sf_base_canton"></select></div>
+        <div><label class="s-label">Zone principale</label><input id="sf_zones"></div>
+
+        <div class="s-full">
+          <label class="s-label">Cantons desservis</label>
+          <div class="s-serviceTools">
+            <button type="button" class="s-miniPick" data-spreset="romandie">Suisse romande</button>
+            <button type="button" class="s-miniPick" data-spreset="german">Suisse alémanique</button>
+            <button type="button" class="s-miniPick" data-spreset="tessin">Tessin</button>
+            <button type="button" class="s-miniPick" data-spreset="all">Toute la Suisse</button>
+            <button type="button" class="s-miniPick" data-spreset="none">Effacer</button>
+          </div>
+          <div id="sServiceCantons" class="s-cantonChecks"></div>
+        </div>
+
+        <div class="s-full"><label class="s-label">Adresse</label><input id="sf_address"></div>
+        <div><label class="s-label">Statut</label>
+          <select id="sf_status">
+            <option>À qualifier</option><option>Préféré</option><option>Validé</option>
+            <option>Second choix</option><option>Secours</option><option>Ne plus utiliser</option><option>Suspendu</option>
+          </select>
+        </div>
+        <div><label class="s-label">Préféré</label><select id="sf_preferred"><option>Non</option><option>Oui</option></select></div>
+        <div class="s-full"><label class="s-label">Zone / remarques</label><textarea id="sf_note"></textarea></div>
+        <div class="s-full"><label class="s-label">Commentaires internes</label><textarea id="sf_internal"></textarea></div>
+      </div>
+
+      <div class="s-modalActions">
+        <button class="s-btn s-danger" id="sDeleteBtn" style="display:none">Supprimer</button>
+        <button class="s-btn" id="sCancelBtn">Annuler</button>
+        <button class="s-btn s-primary" id="sSaveBtn">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="contactModal" class="modal hidden">
+    <div class="modal-panel">
+      <h2 id="modalTitle">Add contact</h2>
+      <div id="modalMsg"></div>
+      <form id="contactForm">
+        <input id="contactId" type="hidden" />
+        <div class="grid">
+          <div><label>Company</label><input id="company" /></div>
+          <div><label>Category</label><input id="category" placeholder="Partner, Prospect, Client…" /></div>
+          <div><label>First name</label><input id="first_name" /></div>
+          <div><label>Last name</label><input id="last_name" /></div>
+          <div><label>Email</label><input id="email" type="email" /></div>
+          <div><label>Primary phone</label><input id="primary_phone" /></div>
+          <div><label>Other phone</label><input id="other_phone" /></div>
+          <div><label>Country</label><input id="country" /></div>
+          <div><label>City</label><input id="city" /></div>
+          <div class="full">
+            <label>Networks / Associations</label>
+            <div class="network-picker">
+              <div class="network-picker-title">Select all networks / associations that apply:</div>
+              <div id="networkCheckboxes" class="network-checkboxes"></div>
+              <div class="network-other">
+                <input id="networksOther" placeholder="Other association(s), separated by commas" />
+              </div>
+            </div>
+            <input id="networks" type="hidden" />
+          </div>
+          <div class="full"><label>Notes</label><textarea id="notes"></textarea></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn" class="btn-secondary">Cancel</button>
+          <button type="submit" class="btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://eiqbmpatlngojpagfsqb.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_O8_krIBrJUwdtewYyjWcPQ_x1bmEXJf';
+    const TABLE = "IPP_PROGRAM";
+
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let contacts = [];
+    let session = null;
+
+    const NETWORK_OPTIONS = [
+      "IAM",
+      "FIDI",
+      "LACMA",
+      "IMA",
+      "EUROVAN",
+      "OMNI",
+      "PAIMA",
+      "IAMX",
+      "Harmony Relocation Network",
+      "EuRA",
+      "WERC",
+      "IPATA",
+      "ANTRAM",
+      "BAR",
+      "FAM",
+      "CERC",
+      "OneGroup",
+      "RELOADVISOR"
+    ];
+
+
+    const $ = (id) => document.getElementById(id);
+
+    function showMsg(target, text, type="error") {
+      target.innerHTML = text ? `<div class="notice ${type}">${text}</div>` : "";
+    }
+
+    function escapeHtml(v) {
+      return String(v ?? "").replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    }
+
+    function normalize(v) {
+      return (v || "").toString().trim().toLowerCase();
+    }
+
+
+    let activeView = "contacts";
+    let worldMap = null;
+    let usaMap = null;
+    let worldLayer = null;
+    let usaLayer = null;
+
+    const COUNTRY_COORDS = {
+      "Argentina":[-38.4,-63.6],"Australia":[-25.3,133.8],"Austria":[47.5,14.6],"Bahrain":[26.1,50.6],
+      "Bangladesh":[23.7,90.4],"Belgium":[50.5,4.5],"Bolivia":[-16.3,-63.6],"Brazil":[-14.2,-51.9],
+      "Cambodia":[12.6,104.9],"Canada":[56.1,-106.3],"Chile":[-35.7,-71.5],"China":[35.9,104.2],
+      "Colombia":[4.6,-74.3],"Costa Rica":[9.75,-83.75],"Curaçao":[12.17,-68.99],"Cyprus":[35.1,33.4],
+      "Czech Republic":[49.8,15.5],"Côte d'Ivoire":[7.54,-5.55],"Denmark":[56.26,9.5],
+      "Dominican Republic":[18.74,-70.16],"Ecuador":[-1.83,-78.18],"Egypt":[26.82,30.8],
+      "El Salvador":[13.79,-88.9],"Estonia":[58.6,25.0],"Ethiopia":[9.15,40.49],"Finland":[61.92,25.75],
+      "France":[46.23,2.21],"Germany":[51.17,10.45],"Ghana":[7.95,-1.02],"Greece":[39.07,21.82],
+      "Guatemala":[15.78,-90.23],"Honduras":[15.2,-86.24],"Hong Kong":[22.32,114.17],"Hungary":[47.16,19.5],
+      "India":[20.59,78.96],"Indonesia":[-0.79,113.92],"Ireland":[53.14,-7.69],"Israel":[31.05,34.85],
+      "Italy":[41.87,12.57],"Jamaica":[18.11,-77.3],"Japan":[36.2,138.25],"Jordan":[30.59,36.24],
+      "Kenya":[-0.02,37.91],"Kuwait":[29.31,47.48],"Laos":[19.86,102.5],"Lebanon":[33.85,35.86],
+      "Libya":[26.34,17.23],"Luxembourg":[49.82,6.13],"Malaysia":[4.21,101.98],"Malta":[35.94,14.38],
+      "Mexico":[23.63,-102.55],"Morocco":[31.79,-7.09],"Myanmar":[21.92,95.96],"Nepal":[28.39,84.12],
+      "Netherlands":[52.13,5.29],"New Zealand":[-40.9,174.89],"Nicaragua":[12.87,-85.21],"Nigeria":[9.08,8.68],
+      "North Macedonia":[41.61,21.75],"Oman":[21.47,55.98],"Pakistan":[30.38,69.35],"Panama":[8.54,-80.78],
+      "Paraguay":[-23.44,-58.44],"Peru":[-9.19,-75.02],"Philippines":[12.88,121.77],"Poland":[51.92,19.15],
+      "Portugal":[39.4,-8.22],"Puerto Rico":[18.22,-66.59],"Qatar":[25.35,51.18],"Romania":[45.94,24.97],
+      "Russia":[61.52,105.32],"Saudi Arabia":[23.89,45.08],"Serbia":[44.02,21.01],"Singapore":[1.35,103.82],
+      "Slovakia":[48.67,19.7],"South Africa":[-30.56,22.94],"South Korea":[35.91,127.77],"Spain":[40.46,-3.75],
+      "Sweden":[60.13,18.64],"Switzerland":[46.82,8.23],"Taiwan":[23.7,121.0],"Thailand":[15.87,100.99],
+      "Trinidad and Tobago":[10.69,-61.22],"Turkey":[38.96,35.24],"U.S.A":[37.09,-95.71],
+      "Uganda":[1.37,32.29],"Ukraine":[48.38,31.17],"United Arab Emirates":[23.42,53.85],
+      "United Kingdom":[55.38,-3.44],"Uruguay":[-32.52,-55.77],"Venezuela":[6.42,-66.59],"Vietnam":[14.06,108.28],
+      "U.S. Virgin Islands":[18.34,-64.90]
+    };
+
+    const USA_STATES = {
+      AL:["Alabama",32.81,-86.79], AK:["Alaska",64.20,-152.49], AZ:["Arizona",34.05,-111.09], AR:["Arkansas",35.20,-92.37],
+      CA:["California",36.78,-119.42], CO:["Colorado",39.55,-105.78], CT:["Connecticut",41.60,-72.76], DE:["Delaware",38.91,-75.53],
+      FL:["Florida",27.66,-81.52], GA:["Georgia",32.17,-82.90], HI:["Hawaii",19.90,-155.58], ID:["Idaho",44.07,-114.74],
+      IL:["Illinois",40.63,-89.40], IN:["Indiana",40.27,-86.13], IA:["Iowa",41.88,-93.10], KS:["Kansas",39.01,-98.48],
+      KY:["Kentucky",37.84,-84.27], LA:["Louisiana",30.98,-91.96], ME:["Maine",45.25,-69.45], MD:["Maryland",39.05,-76.64],
+      MA:["Massachusetts",42.41,-71.38], MI:["Michigan",44.31,-85.60], MN:["Minnesota",46.73,-94.69], MS:["Mississippi",32.35,-89.40],
+      MO:["Missouri",37.96,-91.83], MT:["Montana",46.88,-110.36], NE:["Nebraska",41.49,-99.90], NV:["Nevada",38.80,-116.42],
+      NH:["New Hampshire",43.19,-71.57], NJ:["New Jersey",40.06,-74.41], NM:["New Mexico",34.52,-105.87], NY:["New York",43.30,-74.22],
+      NC:["North Carolina",35.76,-79.02], ND:["North Dakota",47.55,-101.00], OH:["Ohio",40.42,-82.91], OK:["Oklahoma",35.47,-97.52],
+      OR:["Oregon",43.80,-120.55], PA:["Pennsylvania",41.20,-77.19], RI:["Rhode Island",41.58,-71.48], SC:["South Carolina",33.84,-80.90],
+      SD:["South Dakota",43.97,-99.90], TN:["Tennessee",35.52,-86.58], TX:["Texas",31.97,-99.90], UT:["Utah",39.32,-111.09],
+      VT:["Vermont",44.56,-72.58], VA:["Virginia",37.43,-78.66], WA:["Washington",47.40,-120.74], WV:["West Virginia",38.60,-80.45],
+      WI:["Wisconsin",43.78,-88.79], WY:["Wyoming",43.08,-107.29], DC:["District of Columbia",38.91,-77.04]
+    };
+
+    function setView(view) {
+      activeView = view;
+      ["contacts","worldMap","usaMap","switzerlandMap"].forEach(v => {
+        const tab = $(v + "Tab");
+        const section = $(v + "View");
+        const active = v === view;
+        tab.classList.toggle("active", active);
+        section.classList.toggle("hidden", !active);
+      });
+      if (view === "worldMap") {
+        setTimeout(() => {
+          initWorldMap();
+          worldMap.invalidateSize();
+          renderWorldMap();
+        }, 60);
+      } else if (view === "usaMap") {
+        setTimeout(() => {
+          initUsaMap();
+          usaMap.invalidateSize();
+          renderUsaMap();
+        }, 60);
+      } else if (view === "switzerlandMap") {
+        setTimeout(() => {
+          initSwissHistoricalModule();
+          renderSwissHistorical();
+        }, 30);
+      }
+    }
+
+    function createCountIcon(count, cls) {
+      return L.divIcon({
+        className: "",
+        html: `<div class="${cls}">${count}</div>`,
+        iconSize: [36,36],
+        iconAnchor: [18,18]
+      });
+    }
+
+    function groupByCompany(list) {
+      const map = new Map();
+      list.forEach(c => {
+        const key = normalize(c.company) || `__${c.id}`;
+        if (!map.has(key)) map.set(key, { company: c.company || "Company not specified", contacts: [] });
+        map.get(key).contacts.push(c);
+      });
+      return [...map.values()].sort((a,b)=>a.company.localeCompare(b.company));
+    }
+
+    function companyCards(list) {
+      const groups = groupByCompany(list);
+      if (!groups.length) return `<div class="empty-state">No partner found for this selection.</div>`;
+      return groups.map(g => {
+        const contactHtml = g.contacts.map(c => {
+          const name = [c.first_name,c.last_name].filter(Boolean).join(" ") || "Contact not specified";
+          return `<div class="partner-contact">
+            <strong>${escapeHtml(name)}</strong><br>
+            ${c.email ? `<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a><br>` : ""}
+            ${c.primary_phone ? `${escapeHtml(c.primary_phone)}<br>` : ""}
+            ${c.city ? `${escapeHtml(c.city)} · ` : ""}${c.networks ? escapeHtml(c.networks) : ""}
+            <div style="margin-top:6px"><button class="btn-secondary" onclick="editContact('${c.id}')">Edit</button></div>
+          </div>`;
+        }).join("");
+        return `<article class="partner-card"><h3>${escapeHtml(g.company)}</h3>${contactHtml}</article>`;
+      }).join("");
+    }
+
+    function initWorldMap() {
+      if (worldMap) return;
+      worldMap = L.map("worldMap", { minZoom:1.5, worldCopyJump:true }).setView([22,10], 2);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom:18,
+        attribution:'&copy; OpenStreetMap contributors'
+      }).addTo(worldMap);
+      worldLayer = L.layerGroup().addTo(worldMap);
+    }
+
+    function renderWorldMap(selectedCountry="") {
+      if (!worldMap) return;
+      worldLayer.clearLayers();
+
+      const countryGroups = new Map();
+      contacts.filter(c => c.country).forEach(c => {
+        if (!countryGroups.has(c.country)) countryGroups.set(c.country, []);
+        countryGroups.get(c.country).push(c);
+      });
+
+      const countries = [...countryGroups.keys()].sort((a,b)=>a.localeCompare(b));
+      $("worldCountrySelect").innerHTML = `<option value="">Select a country</option>` +
+        countries.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+      if (selectedCountry) $("worldCountrySelect").value = selectedCountry;
+
+      let plotted = 0;
+      countryGroups.forEach((rows,country) => {
+        const coord = COUNTRY_COORDS[country];
+        if (!coord) return;
+        plotted++;
+        const companies = groupByCompany(rows).length;
+        const marker = L.marker(coord, { icon:createCountIcon(companies,"country-marker") }).addTo(worldLayer);
+        marker.bindTooltip(`${country}: ${companies} companies / ${rows.length} contacts`);
+        marker.on("click", () => selectWorldCountry(country));
+      });
+
+      const allCompanies = groupByCompany(contacts.filter(c=>c.country)).length;
+      $("worldCountriesCount").textContent = `${countryGroups.size} countries`;
+      $("worldCompaniesCount").textContent = `${allCompanies} companies`;
+      $("worldContactsCount").textContent = `${contacts.filter(c=>c.country).length} contacts`;
+
+      const list = selectedCountry ? (countryGroups.get(selectedCountry) || []) : contacts.filter(c=>c.country);
+      $("worldSelectionTitle").textContent = selectedCountry || "All countries";
+      $("worldPartnerList").innerHTML = companyCards(list);
+
+      if (selectedCountry && COUNTRY_COORDS[selectedCountry]) {
+        worldMap.setView(COUNTRY_COORDS[selectedCountry], Math.max(worldMap.getZoom(), 4));
+      }
+    }
+
+    function selectWorldCountry(country) {
+      $("worldCountrySelect").value = country;
+      renderWorldMap(country);
+    }
+
+    function isUsCountry(value) {
+      const v = normalize(value).replace(/\./g, "");
+      return ["usa","u s a","united states","united states of america","etats unis","états unis"].includes(v);
+    }
+
+    function extractUsState(contact) {
+      const validCodes = new Set(Object.keys(USA_STATES));
+      const cityRaw = (contact.city || "").trim();
+      const cityUpper = cityRaw.toUpperCase();
+      const notes = contact.notes || "";
+
+      // 1. The City field may directly contain a state code, e.g. NJ, TX, CA.
+      if (validCodes.has(cityUpper)) return cityUpper;
+
+      // 2. The City field may contain "City, ST" or another string ending in the code.
+      const cityState = cityUpper.match(/(?:^|[\s,;/\-])([A-Z]{2})\s*$/);
+      if (cityState && validCodes.has(cityState[1])) return cityState[1];
+
+      // 3. The City field may contain a full state name.
+      for (const [code, info] of Object.entries(USA_STATES)) {
+        const stateName = info[0].toLowerCase();
+        if (cityRaw.toLowerCase() === stateName || cityRaw.toLowerCase().includes(stateName)) return code;
+      }
+
+      // 4. Historical IAM data often stores the state in Notes.
+      const notePatterns = [
+        /Region\/state:\s*([A-Z]{2})\b/i,
+        /\bState:\s*([A-Z]{2})\b/i,
+        /\bUSA state:\s*([A-Z]{2})\b/i,
+        /\bU\.?S\.?A\.?\s+state:\s*([A-Z]{2})\b/i
+      ];
+      for (const pattern of notePatterns) {
+        const m = notes.match(pattern);
+        if (m) {
+          const code = m[1].toUpperCase();
+          if (validCodes.has(code)) return code;
+        }
+      }
+
+      // 5. As a last safe check, look for a full state name in Notes.
+      const lowerNotes = notes.toLowerCase();
+      for (const [code, info] of Object.entries(USA_STATES)) {
+        if (lowerNotes.includes(info[0].toLowerCase())) return code;
+      }
+
+      return "";
+    }
+
+    function initUsaMap() {
+      if (usaMap) return;
+      usaMap = L.map("usaMap", { minZoom:2 }).setView([38.3,-96], 4);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom:18,
+        attribution:'&copy; OpenStreetMap contributors'
+      }).addTo(usaMap);
+      usaLayer = L.layerGroup().addTo(usaMap);
+    }
+
+    function renderUsaMap(selectedState="") {
+      if (!usaMap) return;
+      usaLayer.clearLayers();
+
+      // Accept U.S.A plus older spelling variants, so the map remains robust
+      // even if a legacy contact has not yet been standardized.
+      const usaContacts = contacts.filter(c => isUsCountry(c.country));
+      const stateGroups = new Map();
+      const unassigned = [];
+
+      usaContacts.forEach(c => {
+        const st = extractUsState(c);
+        if (!st) {
+          unassigned.push(c);
+          return;
+        }
+        if (!stateGroups.has(st)) stateGroups.set(st, []);
+        stateGroups.get(st).push(c);
+      });
+
+      // Always show every U.S. state in the selector. States with contacts
+      // display the number of contacts in parentheses.
+      const states = Object.keys(USA_STATES)
+        .sort((a,b)=>USA_STATES[a][0].localeCompare(USA_STATES[b][0]));
+
+      $("usaStateSelect").innerHTML = `<option value="">Select a state</option>` +
+        states.map(s => {
+          const count = (stateGroups.get(s) || []).length;
+          return `<option value="${s}">${USA_STATES[s][0]} (${s})${count ? ` — ${count}` : ""}</option>`;
+        }).join("");
+      if (selectedState) $("usaStateSelect").value = selectedState;
+
+      stateGroups.forEach((rows,code) => {
+        const [,lat,lng] = USA_STATES[code];
+        const companies = groupByCompany(rows).length;
+        const marker = L.marker([lat,lng], { icon:createCountIcon(companies,"state-marker") }).addTo(usaLayer);
+        marker.bindTooltip(`${USA_STATES[code][0]} (${code}): ${companies} companies / ${rows.length} contacts`);
+        marker.on("click", () => selectUsaState(code));
+      });
+
+      $("usaStatesCount").textContent = `${stateGroups.size} states with contacts`;
+      $("usaCompaniesCount").textContent = `${groupByCompany(usaContacts).length} companies`;
+      $("usaContactsCount").textContent = `${usaContacts.length} contacts`;
+      $("usaUnassignedCount").textContent = `${unassigned.length} without state`;
+
+      const list = selectedState ? (stateGroups.get(selectedState) || []) : usaContacts;
+      $("usaSelectionTitle").textContent = selectedState
+        ? `${USA_STATES[selectedState][0]} (${selectedState})`
+        : "All U.S.A contacts";
+      $("usaPartnerList").innerHTML = companyCards(list);
+
+      if (selectedState) {
+        const [,lat,lng] = USA_STATES[selectedState];
+        usaMap.setView([lat,lng], 6);
+      }
+    }
+
+
+    function selectUsaState(code) {
+      $("usaStateSelect").value = code;
+      renderUsaMap(code);
+    }
+
+
+    const SWISS_ORIGINAL = [{"id":"CH-0001","country":"Suisse","codes":["GE","VD","ZH"],"zones":"Genève; Vaud; Zurich","category":"Sous-traitant","subcategory":"Déménagement","company":"Kolos","contact":"Rexhep","email":"info@kolostransport.ch","phone":"+41 79 269 15 93","address":"Chemin de la Crétaux 2, 1196 Gland","note":"Lausanne - Genève - clients VIP + Zurich","status":"À qualifier","priority":"Normale","preferred":"Oui","internal":"","active":"Oui"},{"id":"CH-0002","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Sous-traitant","subcategory":"Déménagement","company":"Master","contact":"Choco","email":"info@masterrelocation.ch","phone":"+41 76 505 84 82","address":"","note":"Genève - clients VIP + privés","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0003","country":"Suisse","codes":["GE","VD"],"zones":"Genève; Vaud","category":"Sous-traitant","subcategory":"Déménagement","company":"TBM","contact":"Roy Valverde","email":"thebestmoving@hotmail.ch","phone":"+41 79 781 69 57","address":"","note":"Privés + agents","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0004","country":"Suisse","codes":["GE","VD"],"zones":"Genève; Vaud","category":"Sous-traitant","subcategory":"Déménagement","company":"Top Moving Services","contact":"Lesther Narvaez","email":"info@topmoving.ch","phone":"+41 79 708 32 76","address":"","note":"Privés + agents","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0005","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Sous-traitant","subcategory":"Déménagement","company":"Kehrli & Oeler Zurich","contact":"Silvia Caballer","email":"s.caballer@kehrlioeler.ch","phone":"+41 79 924 02 39","address":"","note":"Zurich","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0006","country":"Suisse","codes":["BE"],"zones":"Berne","category":"Sous-traitant","subcategory":"Déménagement","company":"Kehrli & Oeler","contact":"Besart Zeqiri","email":"b.zeqiri@kehrlioeler.ch","phone":"","address":"","note":"Berne","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0007","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Sous-traitant","subcategory":"Déménagement","company":"W. Wiedmer AG","contact":"Willi Etle","email":"w.etle@wiedmer.ch","phone":"+41 78 874 85 90","address":"","note":"Zurich","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0008","country":"Suisse","codes":["SG"],"zones":"Saint-Gall","category":"Sous-traitant","subcategory":"Déménagement","company":"Ruckstuhl Transport","contact":"David Looser","email":"dlooser@ruckstuhl-sg.ch","phone":"+41 71 313 91 94","address":"","note":"Région de Saint-Gall / Est suisse","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0009","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Sous-traitant","subcategory":"Déménagement","company":"Seegmuller","contact":"Pascal Causeret","email":"pascal.causeret@seegmuller.com","phone":"+33 3 89 31 24 25","address":"","note":"Région Bâle","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0010","country":"Suisse","codes":[],"zones":"Suisse alémanique","category":"Sous-traitant","subcategory":"Déménagement","company":"Quality Services","contact":"Peter Muller","email":"moving@qualityservices.ch","phone":"+41 79 194 09 64","address":"","note":"Suisse alémanique","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0011","country":"Suisse","codes":["TI"],"zones":"Tessin","category":"Sous-traitant","subcategory":"Déménagement","company":"Zust & Bachmeier","contact":"Monica Malinverno","email":"monica.maliverno@zust-bachmeier.com","phone":"+41 78 649 63 07","address":"","note":"Tessin","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0012","country":"Suisse","codes":["TI","ZH"],"zones":"Tessin; Zurich","category":"Sous-traitant","subcategory":"Déménagement","company":"N.C.R&T.","contact":"Ramiz & Astrit Hajdini","email":"info@ncrt.ch","phone":"+41 79 428 37 27; +41 78 920 16 66","address":"Flughofstrasse 122, 8153 Rümlang","note":"Tessin / Suisse alémanique","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0013","country":"Suisse","codes":[],"zones":"","category":"Sous-traitant","subcategory":"Déménagement","company":"Guigard","contact":"Jean Jacques Guigard","email":"jeanjacquesguigard@guidev.eu","phone":"+33 6 11 14 25 12","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0014","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Matériel","subcategory":"Fournitures déménagement","company":"Démébox - Plastivert SA","contact":"Alan","email":"info@demebox.ch","phone":"+41 78 778 98 03","address":"","note":"Genève et région","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0015","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Matériel","subcategory":"Fournitures déménagement","company":"N.C.R&T.","contact":"Ramiz & Astrit Hajdini","email":"info@ncrt.ch","phone":"+41 79 428 37 27; +41 78 920 16 66","address":"","note":"Suisse alémanique uniquement","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0016","country":"Suisse","codes":["GE","VD"],"zones":"Genève; Vaud","category":"Matériel","subcategory":"Fournitures déménagement","company":"Kolos","contact":"Rexhep","email":"info@kolostransport.ch","phone":"+41 79 269 15 93","address":"","note":"Selon budget chantier, au cas par cas","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0017","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Export maritime FCL","company":"AIT Worldwide Logistics Switzerland AG","contact":"Mevlide Beka","email":"mbeka@aitworldwide.com","phone":"+41 61 563 10 77","address":"","note":"Principalement USA","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0018","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Export maritime FCL","company":"FS Freight Service AG","contact":"Stefan Gaenswein","email":"s.gaenswein@freight-service.ch","phone":"+41 61 205 98 50","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0019","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Export maritime FCL","company":"SpediTeam AG","contact":"Fabio Pafumi","email":"fabio.pafumi@spediteam.ch; operations@spediteam.ch","phone":"+41 61 284 98 00; +41 77 468 30 20","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0020","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Export maritime FCL","company":"Swiss Trading Solutions","contact":"René Meier","email":"Rmeier@trading-solutions.ch","phone":"+41 61 715 90 58; +41 79 487 39 98","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0021","country":"Suisse","codes":["GE","VD"],"zones":"Genève; Vaud","category":"Transitaire","subcategory":"Export maritime FCL","company":"Herport","contact":"Nicolas Pezard","email":"n.pezard@herport.fr","phone":"+33 4 69 61 40 92","address":"","note":"Genève - Lausanne uniquement","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0022","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Transitaire","subcategory":"Export maritime LCL","company":"DB Schenker Switzerland","contact":"Stephan Schmid","email":"ch.sm.zrh.ocean-cm@dbschenker.com","phone":"+41 58 589 53 28; +41 58 589 53 43","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0023","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Export maritime LCL","company":"AIT Worldwide Logistics Switzerland AG","contact":"Yannik Domagala","email":"ydomagala@aitworldwide.com","phone":"+41 61 563 04 08; +41 76 444 50 28","address":"","note":"Principalement USA","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0024","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Transitaire","subcategory":"Export avion","company":"DB Schenker Switzerland","contact":"Alessio Buonavoglia; Matteo Chiavaroli","email":"alessio.buonavoglia@dbschenker.com; matteo.chiavaroli@dbschenker.com","phone":"+41 58 589 50 87; +41 58 589 54 04","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0025","country":"Suisse","codes":["GE","ZH"],"zones":"Genève; Zurich","category":"Transitaire","subcategory":"Export avion","company":"Fracht SA","contact":"Yanick Bader","email":"y.bader@frachtsa-ge.ch","phone":"+41 22 791 70 87; +41 79 606 17 85","address":"","note":"Zurich ou Genève","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0026","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Export avion","company":"AIT Worldwide Logistics Switzerland AG","contact":"Alexis Keiflin","email":"EAP-Export@aitworldwide.com","phone":"+41 61 563 12 65","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0027","country":"Suisse","codes":["GE","ZH"],"zones":"Genève; Zurich","category":"Transitaire","subcategory":"Import / Export avion","company":"Fracht SA","contact":"Yanick Bader","email":"y.bader@frachtsa-ge.ch","phone":"+41 22 791 70 87; +41 79 606 17 85","address":"","note":"Zurich ou Genève","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0028","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Import / Export maritime FCL","company":"SpediTeam AG","contact":"Fabio Pafumi","email":"fabio.pafumi@spediteam.ch; operations@spediteam.ch","phone":"+41 61 284 98 00; +41 77 468 30 20","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0029","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Transitaire","subcategory":"Import / Export maritime FCL","company":"Herport","contact":"Nicolas Pezard","email":"n.pezard@herport.fr","phone":"+33 4 69 61 40 92","address":"","note":"Principalement Genève et région","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0030","country":"Suisse","codes":["ZH","BS"],"zones":"Zurich; Bâle","category":"Transitaire","subcategory":"Import / Export maritime FCL","company":"AIT Worldwide Logistics Switzerland AG","contact":"Nicolas Zbinden","email":"nzbinden@nvo-consolidation.ch","phone":"+41 61 563 10 81","address":"","note":"Spécialisé USA au départ région Zurich/Bâle","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0031","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Import / Export maritime FCL","company":"FS Freight Service AG","contact":"Ardian Dervisi","email":"a.dervisi@freight-service.ch","phone":"+41 61 205 98 55","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0032","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Import / Export maritime FCL","company":"Swiss Trading Solutions","contact":"René Meier","email":"Rmeier@trading-solutions.ch","phone":"+41 61 715 90 58; +41 79 487 39 98","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0033","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Import maritime LCL","company":"SpediTeam AG","contact":"Fabio Pafumi","email":"fabio.pafumi@spediteam.ch; operations@spediteam.ch","phone":"+41 61 284 98 00; +41 77 468 30 20","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0034","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Transitaire","subcategory":"Import maritime LCL","company":"AIT Worldwide Logistics Switzerland AG","contact":"Nicolas Zbinden","email":"nzbinden@nvo-consolidation.ch","phone":"+41 61 563 10 81","address":"","note":"","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0035","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Transitaire","subcategory":"Import maritime LCL","company":"Herport","contact":"Nicolas Pezard","email":"n.pezard@herport.fr","phone":"+33 4 69 61 40 92","address":"","note":"Principalement Genève et région","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0036","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Handyman","subcategory":"Montage / petits travaux","company":"PLURISERVICES","contact":"Rui Fradique","email":"contact@pluri-services.ch","phone":"+41 78 840 18 88","address":"","note":"Genève","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0037","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Douane","subcategory":"Import / Export standard","company":"Douanepartner","contact":"Mary-Rose; Catherine","email":"douanepartner@douanepartner.com","phone":"+41 22 301 25 12","address":"","note":"Bardonnex CH / St-Julien FR","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0038","country":"Suisse","codes":["BS","SH","SG","TI"],"zones":"Bâle; Schaffhouse; Saint-Gall; Tessin","category":"Douane","subcategory":"Import / Export standard","company":"WeDeclare AG","contact":"Silvia Zimmermann","email":"Silvia.Zimmermann@wedeclare.com","phone":"+41 58 677 99 81","address":"","note":"Bâle, Thayngen, St-Margrethen, Chiasso","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0039","country":"Suisse","codes":["BS"],"zones":"Bâle","category":"Douane","subcategory":"Import / Export standard","company":"Zollimpex","contact":"Sandra Jimenez; Björn Sarstedt","email":"b.sarstedt@zollimpex.ch","phone":"+41 61 332 22 11","address":"","note":"Bâle St-Louis Autoroute","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0040","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Douane","subcategory":"Diplomatique","company":"Somatra","contact":"Christophe Caputo","email":"declarant@somatra.ch","phone":"+41 22 827 38 36","address":"","note":"Bardonnex CH / St-Julien FR","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0041","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Douane","subcategory":"Diplomatique","company":"Douanepartner","contact":"Mary-Rose; Catherine","email":"douanepartner@douanepartner.com","phone":"+41 22 301 25 12","address":"","note":"Bardonnex CH / St-Julien FR","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0042","country":"Suisse","codes":["BE"],"zones":"Berne","category":"Douane","subcategory":"Diplomatique","company":"Kehrli & Oeler Bern","contact":"Mevlut Güngör","email":"m.guengoer@kehrlioeler.ch","phone":"","address":"","note":"Berne","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0043","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Garde-meubles","subcategory":"Stockage","company":"Carry-Box","contact":"Jean-Marie Giannasi","email":"transport@carry-box.ch","phone":"+41 22 341 21 49; +41 79 599 62 90","address":"Route du Nant d'Avril 58, 1214 Vernier","note":"Vernier (Genève)","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0044","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Garde-meubles","subcategory":"Stockage","company":"Davel Déménagement","contact":"My; Philippe Davel","email":"reception@Davel.ch; phdavel@Davel.ch","phone":"+41 22 341 21 06","address":"Chemin Grenet 20, 1217 Meyrin","note":"Vernier (Genève)","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0045","country":"Suisse","codes":["VD"],"zones":"Vaud","category":"Garde-meubles","subcategory":"Stockage","company":"Kolos","contact":"Rexhep","email":"info@kolostransport.ch","phone":"+41 79 269 15 93","address":"","note":"Lausanne et région","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0046","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Garde-meubles","subcategory":"Stockage","company":"N.C.R&T.","contact":"Ramiz & Astrit Hajdini","email":"info@ncrt.ch","phone":"+41 79 428 37 27; +41 78 920 16 66","address":"Flughofstrasse 122, 8153 Rümlang","note":"Rümlang (Zurich)","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0047","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Garde-meubles","subcategory":"Stockage","company":"MW Relocation Services","contact":"Mark Muss","email":"mark.muss@mwrelo.com","phone":"+41 79 939 39 39","address":"","note":"Zurich","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0048","country":"France","codes":[],"zones":"Pays de Gex","category":"Garde-meubles","subcategory":"Stockage","company":"SELFBOX","contact":"","email":"","phone":"+33 4 50 20 36 36; +33 6 07 59 70 84","address":"Rue de l'Artisanat 7A, 01710 Thoiry","note":"France voisine - Pays de Gex","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0049","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Caisses","subcategory":"Fabrication de caisses","company":"Apollo Déménagement","contact":"Andrew Kubler","email":"info@apollo-demenagements.ch","phone":"+41 22 300 05 50","address":"","note":"Genève","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0050","country":"Suisse","codes":["ZH"],"zones":"Zurich","category":"Caisses","subcategory":"Fabrication de caisses","company":"Swiss Crates","contact":"Mark Muss","email":"mark.muss@mwrelo.com","phone":"+41 79 939 39 39","address":"","note":"Zurich","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0051","country":"Suisse","codes":["GE","VD"],"zones":"Genève; Vaud","category":"Caisses","subcategory":"Fabrication de caisses","company":"Caisserie de la Rippe","contact":"Nathalie Jaton","email":"info@scierie-larippe.ch","phone":"+41 22 367 13 42","address":"","note":"Genève / Lausanne","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"},{"id":"CH-0052","country":"Suisse","codes":["GE"],"zones":"Genève","category":"Déchetterie","subcategory":"Évacuation / déchets","company":"Serbeco","contact":"","email":"facturation@groupe-serbeco.ch","phone":"+41 22 939 15 22","address":"","note":"Vernier (Genève)","status":"À qualifier","priority":"Normale","preferred":"Non","internal":"","active":"Oui"}];
+    const S_CANTONS = {AG:"Argovie",AI:"Appenzell Rhodes-Intérieures",AR:"Appenzell Rhodes-Extérieures",BE:"Berne",BL:"Bâle-Campagne",BS:"Bâle-Ville",FR:"Fribourg",GE:"Genève",GL:"Glaris",GR:"Grisons",JU:"Jura",LU:"Lucerne",NE:"Neuchâtel",NW:"Nidwald",OW:"Obwald",SG:"Saint-Gall",SH:"Schaffhouse",SO:"Soleure",SZ:"Schwytz",TG:"Thurgovie",TI:"Tessin",UR:"Uri",VD:"Vaud",VS:"Valais",ZG:"Zoug",ZH:"Zurich"};
+    const S_ALIASES = {"Zürich":"ZH","Zurich":"ZH","Bern":"BE","Berne":"BE","Luzern":"LU","Lucerne":"LU","Uri":"UR","Schwyz":"SZ","Obwalden":"OW","Nidwalden":"NW","Glarus":"GL","Zug":"ZG","Fribourg":"FR","Freiburg":"FR","Solothurn":"SO","Basel-Stadt":"BS","Basel-Landschaft":"BL","Schaffhausen":"SH","Appenzell Ausserrhoden":"AR","Appenzell Innerrhoden":"AI","St. Gallen":"SG","St.Gallen":"SG","Graubünden":"GR","Aargau":"AG","Thurgau":"TG","Ticino":"TI","Vaud":"VD","Valais":"VS","Wallis":"VS","Neuchâtel":"NE","Neuchatel":"NE","Genève":"GE","Geneva":"GE","Genf":"GE","Jura":"JU"};
+    const S_CATEGORY_OPTIONS = {
+      "Sous-traitant":["Déménagement","Emballage / manutention","Transport / livraison","Monte-meubles"],
+      "Transitaire":["Export maritime FCL","Export maritime LCL","Import maritime FCL","Import maritime LCL","Import / Export maritime FCL","Import / Export avion","Export avion","Maritime","Maritime FCL","Maritime FCL / LCL","Maritime LCL / avion","Avion"],
+      "Douane":["Import / Export standard","Diplomatique","Standard"],
+      "Garde-meubles":["Stockage"],
+      "Caisses":["Fabrication de caisses","Fabrication"],
+      "Matériel":["Fournitures déménagement"],
+      "Handyman":["Montage / petits travaux"],
+      "Déchetterie":["Évacuation / déchets"]
+    };
+    const S_CATEGORY_FR = {
+      "Crate Manufacturer":"Caisses",
+      "Customs Agent":"Douane",
+      "Freight Forwarder":"Transitaire",
+      "Mover":"Sous-traitant",
+      "Moving / Relocation Partner":"Sous-traitant",
+      "Packing Material Supplier":"Matériel",
+      "Storage Provider":"Garde-meubles",
+      "Subcontractor":"Sous-traitant",
+      "Waste Disposal":"Déchetterie",
+      "Handyman":"Handyman",
+      "Caisses":"Caisses",
+      "Douane":"Douane",
+      "Déchetterie":"Déchetterie",
+      "Garde-meubles":"Garde-meubles",
+      "Matériel":"Matériel",
+      "Sous-traitant":"Sous-traitant",
+      "Transitaire":"Transitaire"
+    };
+
+    function sCategoryFr(value) {
+      return S_CATEGORY_FR[value] || value || "Sous-traitant";
+    }
+
+    const S_CANTON_OPTIONS = Object.entries(S_CANTONS);
+    const S_GROUPS = {
+      romandie:["GE","VD","VS","FR","NE","JU"],
+      german:["BE","BS","BL","ZH","AG","SO","LU","ZG","SZ","UR","OW","NW","GL","SH","TG","SG","AR","AI","GR"],
+      tessin:["TI"],
+      all:Object.keys(S_CANTONS),
+      none:[]
+    };
+
+    let sSelected = "GE";
+    let sEditingKey = null;
+    let sMapBuilt = false;
+
+    function sNorm(v) {
+      return String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+    }
+
+    function sContactName(c) {
+      return [c.first_name,c.last_name].filter(Boolean).join(" ").trim();
+    }
+
+    function sSplitCantons(v) {
+      return [...new Set(String(v||"").split(/[,;|]+/).map(x=>x.trim().toUpperCase()).filter(x=>S_CANTONS[x]))];
+    }
+
+    function sSupabaseToOld(c) {
+      const codes = sSplitCantons(c.cantons_served);
+      const base = String(c.canton||"").toUpperCase();
+      if (!codes.length && S_CANTONS[base]) codes.push(base);
+      return {
+        id: c.id,
+        _supabase_id: c.id,
+        _source: "supabase",
+        country: c.country || "Switzerland",
+        codes,
+        zones: c.city || "",
+        category: sCategoryFr(c.category),
+        subcategory: c.subcategory || "",
+        company: c.company || "",
+        contact: sContactName(c),
+        email: c.email || "",
+        phone: c.primary_phone || c.other_phone || "",
+        address: c.address || "",
+        note: c.notes || "",
+        status: c.status || "À qualifier",
+        priority: c.preferred ? "Haute" : "Normale",
+        preferred: c.preferred ? "Oui" : "Non",
+        internal: c.internal_notes || "",
+        active: (c.status==="Ne plus utiliser" || c.status==="Suspendu") ? "Non" : "Oui"
+      };
+    }
+
+    function sPartnerKey(p) {
+      const em = sNorm(String(p.email||"").split(/[;,\n]/)[0]);
+      if (em) return "e:"+em;
+      return "c:"+sNorm(p.company)+"|"+sNorm(p.contact);
+    }
+
+    function getSwissPartnersMerged() {
+      const map = new Map();
+
+      // Base historique intégrée au fichier.
+      SWISS_ORIGINAL.forEach(p => {
+        const clone = JSON.parse(JSON.stringify(p));
+        clone.category = sCategoryFr(clone.category);
+        clone._source = "historical";
+        clone._historical_id = p.id;
+        map.set(sPartnerKey(clone), clone);
+      });
+
+      // Récupère aussi les partenaires qui avaient été ajoutés/modifiés dans
+      // l'ancienne fiche et conservés dans le navigateur, si l'ancien module
+      // a été utilisé sur le même domaine.
+      try {
+        const savedOld = JSON.parse(localStorage.getItem("thesmc_partners_v2_20260915") || "null");
+        if (Array.isArray(savedOld)) {
+          savedOld.forEach(p => {
+            const clone = JSON.parse(JSON.stringify(p));
+            clone.category = sCategoryFr(clone.category);
+            clone._source = "ancienne base navigateur";
+            clone._historical_id = p.id || null;
+            map.set(sPartnerKey(clone), clone);
+          });
+        }
+      } catch(e) {}
+
+      contacts.forEach(c => {
+        const country = sNorm(c.country).replace(/\./g,"");
+        const looksSwiss = country==="switzerland" || country==="suisse" || c.canton || c.cantons_served;
+        if (!looksSwiss) return;
+        const p = sSupabaseToOld(c);
+        const k = sPartnerKey(p);
+        if (map.has(k)) {
+          const oldp = map.get(k);
+          map.set(k, {
+            ...oldp,
+            ...Object.fromEntries(Object.entries(p).filter(([key,val]) => val !== null && val !== undefined && val !== "" && !(Array.isArray(val)&&!val.length))),
+            codes: p.codes.length ? p.codes : oldp.codes,
+            _historical_id: oldp._historical_id,
+            _supabase_id: c.id,
+            _source: "merged"
+          });
+        } else {
+          map.set(k,p);
+        }
+      });
+      return [...map.values()];
+    }
+
+    function sCountFor(code) {
+      return getSwissPartnersMerged().filter(p => (p.codes||[]).includes(code)).length;
+    }
+
+    function sBuildCategories() {
+      const cur = $("sCategory").value;
+      const cats = [...new Set(getSwissPartnersMerged().map(p=>sCategoryFr(p.category)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
+      $("sCategory").innerHTML = '<option value="">Tous les métiers</option>' + cats.map(c=>`<option>${escapeHtml(c)}</option>`).join("");
+      if (cats.includes(cur)) $("sCategory").value = cur;
+    }
+
+    function sFiltered() {
+      const q=sNorm($("sSearch").value), cat=$("sCategory").value, st=$("sStatus").value;
+      let a=getSwissPartnersMerged().filter(p => {
+        const pcat = sCategoryFr(p.category);
+        return (sSelected==="ALL" || (p.codes||[]).includes(sSelected))
+          && (!cat || pcat===cat)
+          && (!st || (p.status||"À qualifier")===st);
+      });
+      if(q) a=a.filter(p=>sNorm(Object.values(p).flat().join(" ")).includes(q));
+      const sort=$("sSort").value;
+      if(sort==="company") a.sort((x,y)=>(x.company||"").localeCompare(y.company||"","fr"));
+      else if(sort==="category") a.sort((x,y)=>sCategoryFr(x.category).localeCompare(sCategoryFr(y.category),"fr") || (x.company||"").localeCompare(y.company||"","fr"));
+      else a.sort((x,y)=>((y.preferred==="Oui")-(x.preferred==="Oui")) || (x.company||"").localeCompare(y.company||"","fr"));
+      return a;
+    }
+
+    function sPhoneHref(v) { return String(v||"").split(/[;·/]/)[0].replace(/[^\d+]/g,""); }
+    function sMail(v) { return String(v||"").split(/[;,\n]/)[0].trim(); }
+
+    function sCard(p) {
+      const blocked=p.status==="Ne plus utiliser" || p.status==="Suspendu" || p.active==="Non";
+      const pref=!blocked && (p.preferred==="Oui" || p.status==="Préféré");
+      const ph=sPhoneHref(p.phone), em=sMail(p.email);
+      const key=encodeURIComponent(sPartnerKey(p));
+      return `<article class="s-card ${blocked?"s-blocked":""}">
+        <div class="s-ctop">
+          <div><div class="s-company">${escapeHtml(p.company)}</div><div class="s-contact">${escapeHtml(p.contact||"Contact non renseigné")}</div></div>
+          <span class="s-tag ${blocked?"blocked":pref?"pref":""}">${blocked?"⛔ "+escapeHtml(p.status):pref?"★ Préféré":escapeHtml(p.status||"À qualifier")}</span>
+        </div>
+        <div class="s-service">${escapeHtml(sCategoryFr(p.category))}${p.subcategory?" · "+escapeHtml(p.subcategory):""}</div>
+        ${blocked?'<div class="s-blocked-note">Ce partenaire est conservé dans la base, mais ne doit plus être sollicité.</div>':""}
+        ${p.codes&&p.codes.length?`<div class="s-row"><b>Dessert</b><span>${escapeHtml(p.codes.map(c=>S_CANTONS[c]||c).join(" · "))}</span></div>`:""}
+        ${p.phone?`<div class="s-row"><b>Tél.</b><span>${escapeHtml(p.phone)}</span></div>`:""}
+        ${p.email?`<div class="s-row"><b>E-mail</b><span>${escapeHtml(p.email)}</span></div>`:""}
+        ${p.note?`<div class="s-row"><b>Zone</b><span>${escapeHtml(p.note)}</span></div>`:""}
+        <div class="s-actions">
+          ${em&&!blocked?`<a class="s-act primary" href="mailto:${escapeHtml(em)}">Écrire</a>`:""}
+          ${ph&&!blocked?`<a class="s-act" href="tel:${escapeHtml(ph)}">Appeler</a>`:""}
+          <button class="s-act sEditBtn" data-key="${key}">Modifier</button>
+        </div>
+      </article>`;
+    }
+
+    function renderSwissHistorical() {
+      if (!$("sList")) return;
+      sBuildCategories();
+      const a=sFiltered();
+      $("sPlaceTitle").textContent=sSelected==="ALL"?"Toute la Suisse":`${S_CANTONS[sSelected]} (${sSelected})`;
+      $("sMeta").textContent=sSelected==="ALL"?"Tous les partenaires de la base historique et Supabase":`${sCountFor(sSelected)} partenaire(s) référencé(s)`;
+      $("sCount").textContent=`${a.length} résultat${a.length!==1?"s":""}`;
+      $("sList").innerHTML=a.length?a.map(sCard).join(""):'<div class="empty-state">Aucun partenaire pour cette sélection.</div>';
+      const all=getSwissPartnersMerged();
+      let recovered = 0;
+      try {
+        const savedOld = JSON.parse(localStorage.getItem("thesmc_partners_v2_20260915") || "null");
+        recovered = Array.isArray(savedOld) ? savedOld.length : 0;
+      } catch(e) {}
+      $("sDbStatus").textContent=`${all.length} fiches affichées · base historique: 52${recovered ? " · ancienne base navigateur détectée: "+recovered : ""}`;
+      document.querySelectorAll(".sEditBtn").forEach(b=>b.onclick=()=>openSwissHistorical(decodeURIComponent(b.dataset.key)));
+      document.querySelectorAll("[data-scode]").forEach(el=>el.classList.toggle("sel",el.dataset.scode===sSelected));
+      document.querySelectorAll(".s-canton").forEach(el=>{
+        const c=el.dataset.scode;
+        el.classList.toggle("sel",c===sSelected);
+        el.style.fill=c===sSelected?"#2f9a48":sCountFor(c)>0?"#cfe4d3":"#eef3ef";
+      });
+      buildSwissFallback();
+    }
+
+    function sSelect(c) { sSelected=c; renderSwissHistorical(); }
+
+    function buildSwissFallback() {
+      const wrap=$("sFallback");
+      if (!wrap || wrap.dataset.done) return;
+      wrap.dataset.done="1";
+      Object.entries(S_CANTONS).forEach(([c,n])=>{
+        const b=document.createElement("button");
+        b.className="s-chip"+(sCountFor(c)>0?" has":"");
+        b.dataset.scode=c;
+        b.textContent=c+" · "+n;
+        b.onclick=()=>sSelect(c);
+        wrap.appendChild(b);
+      });
+    }
+
+    async function buildSwissMap() {
+      if (sMapBuilt) return;
+      sMapBuilt=true;
+      try {
+        const d3=await import("https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm");
+        const r=await fetch("https://raw.githubusercontent.com/zcreativelabs/SfGZ-d3-map/main/ch.json");
+        if(!r.ok) throw 0;
+        const geo=await r.json(), proj=d3.geoMercator().fitExtent([[25,20],[775,500]],geo), path=d3.geoPath(proj), ns="http://www.w3.org/2000/svg";
+        let n=0;
+        geo.features.forEach(f=>{
+          const prop=f.properties||{}, raw=prop.name||prop.NAME||"", c=S_ALIASES[raw]||prop.abbreviation||prop.abbr||prop.code||"";
+          if(!S_CANTONS[c]) return;
+          const e=document.createElementNS(ns,"path");
+          e.setAttribute("d",path(f)); e.setAttribute("class","s-canton"); e.dataset.scode=c; e.onclick=()=>sSelect(c); $("sMap").appendChild(e);
+          const ce=path.centroid(f);
+          if(Number.isFinite(ce[0])) {
+            const t=document.createElementNS(ns,"text"); t.setAttribute("x",ce[0]);t.setAttribute("y",ce[1]);t.setAttribute("class","s-lab");t.textContent=c;$("sMap").appendChild(t);
+          }
+          n++;
+        });
+        if(n<20) throw 0;
+        $("sMapStatus").textContent="Carte interactive · cantons colorés = partenaires référencés.";
+      } catch(e) {
+        $("sMap").style.display="none";
+        $("sFallback").style.display="grid";
+        $("sMapStatus").textContent="Sélecteur des 26 cantons disponible.";
+      }
+      renderSwissHistorical();
+    }
+
+    function initSwissHistoricalModule() {
+      if ($("sAddBtn").dataset.ready) return;
+      $("sAddBtn").dataset.ready="1";
+      buildSwissFallback();
+      populateSwissHistoricalModal();
+      buildSwissMap();
+
+      $("sAddBtn").onclick=()=>openSwissHistorical(null);
+      $("sAllBtn").onclick=()=>sSelect("ALL");
+      ["sSearch","sCategory","sStatus","sSort"].forEach(id=>$(id).addEventListener(id==="sSearch"?"input":"change",renderSwissHistorical));
+      $("sCloseBtn").onclick=closeSwissHistorical;
+      $("sCancelBtn").onclick=closeSwissHistorical;
+      $("sModalBack").addEventListener("click",e=>{if(e.target===$("sModalBack")) closeSwissHistorical();});
+      $("sSaveBtn").onclick=saveSwissHistorical;
+      $("sDeleteBtn").onclick=deleteSwissHistorical;
+    }
+
+    function populateSwissHistoricalModal() {
+      $("sf_category").innerHTML=Object.keys(S_CATEGORY_OPTIONS).map(v=>`<option>${escapeHtml(v)}</option>`).join("");
+      $("sf_base_canton").innerHTML=Object.entries(S_CANTONS).map(([c,n])=>`<option value="${c}">${escapeHtml(n)} (${c})</option>`).join("");
+      $("sServiceCantons").innerHTML=Object.entries(S_CANTONS).map(([c,n])=>`<label class="s-cantonCheck"><input type="checkbox" value="${c}"><span>${c} · ${escapeHtml(n)}</span></label>`).join("");
+      $("sf_category").addEventListener("change",()=>refreshSwissHistoricalSubs());
+      document.querySelectorAll("[data-spreset]").forEach(btn=>btn.addEventListener("click",()=>{
+        const wanted=new Set(S_GROUPS[btn.dataset.spreset]||[]);
+        document.querySelectorAll("#sServiceCantons input").forEach(cb=>cb.checked=wanted.has(cb.value));
+      }));
+      refreshSwissHistoricalSubs();
+    }
+
+    function refreshSwissHistoricalSubs(value="") {
+      const opts=S_CATEGORY_OPTIONS[$("sf_category").value]||["Autre"];
+      $("sf_subcategory").innerHTML=opts.map(v=>`<option>${escapeHtml(v)}</option>`).join("");
+      if(value && opts.includes(value)) $("sf_subcategory").value=value;
+    }
+
+    function findSwissByKey(key) {
+      return getSwissPartnersMerged().find(p=>sPartnerKey(p)===key);
+    }
+
+    function openSwissHistorical(key) {
+      const p=key ? findSwissByKey(key) : null;
+      sEditingKey=key||null;
+      $("sModalTitle").textContent=p?`Modifier ${p.company}`:"Ajouter un partenaire";
+      $("sf_company").value=p?.company||"";
+      $("sf_contact").value=p?.contact||"";
+      $("sf_phone").value=p?.phone||"";
+      $("sf_email").value=p?.email||"";
+      $("sf_address").value=p?.address||"";
+      $("sf_zones").value=p?.zones||"";
+      $("sf_note").value=p?.note||"";
+      $("sf_internal").value=p?.internal||"";
+      $("sf_status").value=p?.status||"À qualifier";
+      $("sf_preferred").value=p?.preferred||"Non";
+      const normalizedCat = p ? sCategoryFr(p.category) : "Sous-traitant";
+      const cat=normalizedCat && S_CATEGORY_OPTIONS[normalizedCat] ? normalizedCat : "Sous-traitant";
+      $("sf_category").value=cat; refreshSwissHistoricalSubs(p?.subcategory||"");
+      const base=(p?._supabase_id && p?.codes?.[0]) || p?.base_canton || p?.codes?.[0] || "GE";
+      $("sf_base_canton").value=S_CANTONS[base]?base:"GE";
+      const served=new Set(p?.codes||["GE"]);
+      document.querySelectorAll("#sServiceCantons input").forEach(cb=>cb.checked=served.has(cb.value));
+      $("sDeleteBtn").style.display=p?._supabase_id?"inline-block":"none";
+      showMsg($("sModalMsg"),"");
+      $("sModalBack").classList.add("open");
+    }
+
+    function closeSwissHistorical() { $("sModalBack").classList.remove("open"); }
+
+    function splitSwissContactName(full) {
+      const t=String(full||"").trim();
+      if(!t) return [null,null];
+      const parts=t.split(/\s+/);
+      if(parts.length===1) return [parts[0],null];
+      return [parts.slice(0,-1).join(" "),parts[parts.length-1]];
+    }
+
+    async function saveSwissHistorical() {
+      const company=$("sf_company").value.trim();
+      if(!company) { showMsg($("sModalMsg"),"Indiquez au moins le nom de la société."); return; }
+      const current=sEditingKey?findSwissByKey(sEditingKey):null;
+      const [firstName,lastName]=splitSwissContactName($("sf_contact").value);
+      const canton=$("sf_base_canton").value;
+      let served=[...document.querySelectorAll("#sServiceCantons input:checked")].map(cb=>cb.value);
+      if(!served.length) served=[canton];
+
+      const payload={
+        company,
+        first_name:firstName,
+        last_name:lastName,
+        email:$("sf_email").value.trim()||null,
+        primary_phone:$("sf_phone").value.trim()||null,
+        country:(current?.country && sNorm(current.country)==="france") ? "France" : "Switzerland",
+        city:$("sf_zones").value.trim()||null,
+        networks: current?._supabase_id ? (contacts.find(c=>c.id===current._supabase_id)?.networks||"IAM") : "IAM",
+        category:$("sf_category").value,
+        subcategory:$("sf_subcategory").value||null,
+        canton,
+        cantons_served:served.join(", "),
+        status:$("sf_status").value,
+        preferred:$("sf_preferred").value==="Oui",
+        address:$("sf_address").value.trim()||null,
+        notes:$("sf_note").value.trim()||null,
+        internal_notes:$("sf_internal").value.trim()||null,
+        added_by:session?.user?.email||null,
+        updated_at:new Date().toISOString()
+      };
+
+      let result;
+      if(current?._supabase_id) result=await sb.from(TABLE).update(payload).eq("id",current._supabase_id);
+      else result=await sb.from(TABLE).insert({...payload,created_at:new Date().toISOString()});
+      if(result.error) { showMsg($("sModalMsg"),result.error.message); return; }
+      closeSwissHistorical();
+      await loadContacts();
+      renderSwissHistorical();
+    }
+
+    async function deleteSwissHistorical() {
+      const current=sEditingKey?findSwissByKey(sEditingKey):null;
+      if(!current?._supabase_id) return;
+      if(!confirm("Supprimer ce partenaire de Supabase ?")) return;
+      const {error}=await sb.from(TABLE).delete().eq("id",current._supabase_id);
+      if(error) { showMsg($("sModalMsg"),error.message); return; }
+      closeSwissHistorical();
+      await loadContacts();
+      renderSwissHistorical();
+    }
+
+    async function boot() {
+      const { data } = await sb.auth.getSession();
+      session = data.session;
+      if (session) {
+        openApp();
+      } else {
+        $("loginView").classList.remove("hidden");
+      }
+
+      sb.auth.onAuthStateChange((_event, newSession) => {
+        session = newSession;
+        if (newSession) openApp();
+        else {
+          $("appView").classList.add("hidden");
+          $("loginView").classList.remove("hidden");
+        }
+      });
+    }
+
+    async function openApp() {
+      $("loginView").classList.add("hidden");
+      $("appView").classList.remove("hidden");
+      $("currentUser").textContent = session?.user?.email || "";
+      await loadContacts();
+    }
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showMsg($("loginMsg"), "");
+      const email = $("loginEmail").value.trim();
+      const password = $("loginPassword").value;
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) showMsg($("loginMsg"), error.message);
+    });
+
+    $("logoutBtn").addEventListener("click", () => sb.auth.signOut());
+
+    async function loadContacts() {
+      showMsg($("appMsg"), "");
+      const { data, error } = await sb.from(TABLE).select("*").order("company", { ascending:true });
+      if (error) {
+        showMsg($("appMsg"), error.message);
+        return;
+      }
+      contacts = data || [];
+      buildFilters();
+      renderContacts();
+      if (activeView === "worldMap") renderWorldMap($("worldCountrySelect").value);
+      if (activeView === "usaMap") renderUsaMap($("usaStateSelect").value);
+      if (activeView === "switzerlandMap") renderSwissHistorical();
+      if (activeView === "switzerlandMap") renderSwissHistorical();
+    }
+
+    function buildFilters() {
+      const countries = [...new Set(contacts.map(c => c.country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      const currentCountry = $("countryFilter").value;
+      $("countryFilter").innerHTML = `<option value="">All countries</option>` + countries.map(c => `<option>${escapeHtml(c)}</option>`).join("");
+      $("countryFilter").value = currentCountry;
+
+      const networks = new Set();
+      contacts.forEach(c => {
+        (c.networks || "").split(/[,;/|]/).map(x => x.trim()).filter(Boolean).forEach(x => networks.add(x));
+      });
+      const list = [...networks].sort((a,b)=>a.localeCompare(b));
+      const currentNetwork = $("networkFilter").value;
+      $("networkFilter").innerHTML = `<option value="">All networks</option>` + list.map(n => `<option>${escapeHtml(n)}</option>`).join("");
+      $("networkFilter").value = currentNetwork;
+    }
+
+    function filteredContacts() {
+      const q = normalize($("searchInput").value);
+      const country = $("countryFilter").value;
+      const network = $("networkFilter").value;
+      return contacts.filter(c => {
+        const haystack = [
+          c.company,c.first_name,c.last_name,c.email,c.primary_phone,c.other_phone,
+          c.country,c.city,c.networks,c.category,c.notes
+        ].map(normalize).join(" ");
+        const matchesSearch = !q || haystack.includes(q);
+        const matchesCountry = !country || c.country === country;
+        const matchesNetwork = !network || normalize(c.networks).includes(normalize(network));
+        return matchesSearch && matchesCountry && matchesNetwork;
+      });
+    }
+
+    function renderContacts() {
+      const rows = filteredContacts();
+      $("stats").textContent = `${rows.length} displayed / ${contacts.length} total`;
+      $("contactsBody").innerHTML = rows.map(c => {
+        const name = [c.first_name,c.last_name].filter(Boolean).join(" ");
+        const networkHtml = (c.networks || "").split(/[,;/|]/).map(x=>x.trim()).filter(Boolean).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join("");
+        return `<tr>
+          <td class="${c.company ? "" : "missing"}">${escapeHtml(c.company)}</td>
+          <td class="${name ? "" : "missing"}">${escapeHtml(name)}</td>
+          <td class="${c.email ? "" : "missing"}">${escapeHtml(c.email)}</td>
+          <td class="${c.primary_phone ? "" : "missing"}">${escapeHtml(c.primary_phone)}</td>
+          <td class="${c.country ? "" : "missing"}">${escapeHtml(c.country)}</td>
+          <td>${escapeHtml(c.city)}</td>
+          <td>${networkHtml}</td>
+          <td>${escapeHtml(c.category)}</td>
+          <td>${escapeHtml(c.added_by)}</td>
+          <td><div class="actions">
+            <button class="btn-secondary" onclick="editContact('${c.id}')">Edit</button>
+            <button class="btn-danger" onclick="deleteContact('${c.id}')">Delete</button>
+          </div></td>
+        </tr>`;
+      }).join("");
+    }
+
+    ["searchInput","countryFilter","networkFilter"].forEach(id => {
+      $(id).addEventListener(id==="searchInput" ? "input" : "change", renderContacts);
+    });
+
+    $("clearFilters").addEventListener("click", () => {
+      $("searchInput").value = "";
+      $("countryFilter").value = "";
+      $("networkFilter").value = "";
+      renderContacts();
+    });
+
+    function splitNetworks(value) {
+      return [...new Set(
+        (value || "")
+          .split(/[,;|]+/)
+          .map(v => v.trim())
+          .filter(Boolean)
+      )];
+    }
+
+    function renderNetworkPicker(selectedValue="") {
+      const selected = splitNetworks(selectedValue);
+      const selectedNorm = new Set(selected.map(normalize));
+      $("networkCheckboxes").innerHTML = NETWORK_OPTIONS.map(name => `
+        <label class="network-option">
+          <input type="checkbox" value="${escapeHtml(name)}"
+            ${selectedNorm.has(normalize(name)) ? "checked" : ""}>
+          <span>${escapeHtml(name)}</span>
+        </label>
+      `).join("");
+
+      const other = selected.filter(name =>
+        !NETWORK_OPTIONS.some(opt => normalize(opt) === normalize(name))
+      );
+      $("networksOther").value = other.join(", ");
+      syncNetworksHidden();
+    }
+
+    function syncNetworksHidden() {
+      const checked = [...document.querySelectorAll("#networkCheckboxes input:checked")]
+        .map(el => el.value);
+      const other = splitNetworks($("networksOther").value);
+      const combined = [...checked];
+
+      other.forEach(item => {
+        if (!combined.some(v => normalize(v) === normalize(item))) combined.push(item);
+      });
+
+      // Business rule requested: IAM by default if nothing is selected.
+      if (!combined.length) combined.push("IAM");
+      $("networks").value = combined.join(", ");
+    }
+
+    $("networkCheckboxes").addEventListener("change", syncNetworksHidden);
+    $("networksOther").addEventListener("input", syncNetworksHidden);
+
+    function openModal(contact=null) {
+      $("contactForm").reset();
+      showMsg($("modalMsg"), "");
+      $("modalTitle").textContent = contact ? "Edit contact" : "Add contact";
+      $("contactId").value = contact?.id || "";
+      ["company","first_name","last_name","email","primary_phone","other_phone","country","city","category","notes"]
+        .forEach(k => $(k).value = contact?.[k] || "");
+      renderNetworkPicker(contact?.networks || "IAM");
+      $("contactModal").classList.remove("hidden");
+    }
+
+    $("addBtn").addEventListener("click", () => openModal());
+    $("cancelBtn").addEventListener("click", () => $("contactModal").classList.add("hidden"));
+    $("contactModal").addEventListener("click", e => {
+      if (e.target === $("contactModal")) $("contactModal").classList.add("hidden");
+    });
+
+    window.editContact = function(id) {
+      const c = contacts.find(x => x.id === id);
+      if (c) openModal(c);
+    };
+
+    function collectForm() {
+      syncNetworksHidden();
+      const obj = {};
+      ["company","first_name","last_name","email","primary_phone","other_phone","country","city","networks","category","notes"]
+        .forEach(k => obj[k] = $(k).value.trim() || null);
+      obj.added_by = session?.user?.email || null;
+      obj.updated_at = new Date().toISOString();
+      return obj;
+    }
+
+    function findDuplicate(payload, currentId) {
+      const email = normalize(payload.email);
+      if (email) {
+        const byEmail = contacts.find(c => c.id !== currentId && normalize(c.email) === email);
+        if (byEmail) return byEmail;
+      }
+      const key = [payload.company,payload.first_name,payload.last_name].map(normalize).join("|");
+      if (key !== "||") {
+        const byName = contacts.find(c => c.id !== currentId &&
+          [c.company,c.first_name,c.last_name].map(normalize).join("|") === key);
+        if (byName) return byName;
+      }
+      return null;
+    }
+
+    $("contactForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showMsg($("modalMsg"), "");
+      const id = $("contactId").value || null;
+      const payload = collectForm();
+      const duplicate = findDuplicate(payload, id);
+      if (duplicate) {
+        const dn = [duplicate.first_name, duplicate.last_name].filter(Boolean).join(" ");
+        showMsg($("modalMsg"),
+          `Possible duplicate found: <strong>${escapeHtml(dn || "Unnamed contact")}</strong> — ${escapeHtml(duplicate.company || "")}. Please review before saving.`,
+          "warn");
+        return;
+      }
+
+      let result;
+      if (id) {
+        result = await sb.from(TABLE).update(payload).eq("id", id);
+      } else {
+        payload.created_at = new Date().toISOString();
+        result = await sb.from(TABLE).insert(payload);
+      }
+      if (result.error) {
+        showMsg($("modalMsg"), result.error.message);
+        return;
+      }
+      $("contactModal").classList.add("hidden");
+      await loadContacts();
+    });
+
+    window.deleteContact = async function(id) {
+      const c = contacts.find(x => x.id === id);
+      const name = [c?.first_name,c?.last_name].filter(Boolean).join(" ") || c?.company || "this contact";
+      if (!confirm(`Delete ${name}?`)) return;
+      const { error } = await sb.from(TABLE).delete().eq("id", id);
+      if (error) showMsg($("appMsg"), error.message);
+      else await loadContacts();
+    };
+
+
+    $("contactsTab").addEventListener("click", () => setView("contacts"));
+    $("worldMapTab").addEventListener("click", () => setView("worldMap"));
+    $("usaMapTab").addEventListener("click", () => setView("usaMap"));
+    $("switzerlandMapTab").addEventListener("click", () => setView("switzerlandMap"));
+
+    $("worldCountrySelect").addEventListener("change", e => renderWorldMap(e.target.value));
+    $("worldResetBtn").addEventListener("click", () => {
+      $("worldCountrySelect").value = "";
+      worldMap.setView([22,10], 2);
+      renderWorldMap("");
+    });
+
+    $("usaStateSelect").addEventListener("change", e => renderUsaMap(e.target.value));
+    $("usaResetBtn").addEventListener("click", () => {
+      $("usaStateSelect").value = "";
+      usaMap.setView([38.3,-96], 4);
+      renderUsaMap("");
+    });
+
+    boot();
+  </script>
+</body>
+</html>
